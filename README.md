@@ -22,25 +22,51 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that e
 
 ---
 
-## Quick Start with npx
+## Quick Start
 
-Run the server directly without installation:
+1. **Clone the repository:**
 
 ```bash
-npx mcp-jira-confluence
+git clone <repository-url>
+cd ship-hats-mcp
+```
+
+2. **Install dependencies:**
+
+```bash
+npm install
+```
+
+3. **Create `.env` file with your credentials:**
+
+```bash
+cp .env.example .env
+# Edit .env with your Atlassian credentials
+```
+
+4. **Start the server:**
+
+```bash
+npm run build
+npm start
 ```
 
 **With custom port:**
 
 ```bash
-MCP_PORT=8080 npx mcp-jira-confluence
+MCP_PORT=8080 npm start
 ```
 
-**With environment file:**
+**With verbose mode:**
 
 ```bash
-# Create .env file first with your credentials
-npx mcp-jira-confluence
+VERBOSE=true npm start
+```
+
+**Verify server is running:**
+
+```bash
+curl http://127.0.0.1:3000/health
 ```
 
 ### Required Environment Variables
@@ -70,6 +96,9 @@ IGNORE_TLS_ERRORS=false
 
 # Optional custom port (default: 3000)
 MCP_PORT=3000
+
+# Optional verbose mode (debug logging)
+VERBOSE=false
 ```
 
 **Configuration Priority:**
@@ -83,38 +112,25 @@ This allows you to:
 
 **Get API Token:** [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 
----
+### Verbose Mode (Debug Logging)
 
-## Installation Options
-
-### Option 1: npx (Recommended - No installation needed)
+Enable detailed logging for troubleshooting:
 
 ```bash
-npx mcp-jira-confluence
+VERBOSE=true npm start
 ```
 
-### Option 2: Global Installation
-
-```bash
-npm install -g mcp-jira-confluence
-mcp-jira-confluence
+Or add to `.env`:
+```dotenv
+VERBOSE=true
 ```
 
-### Option 3: Local Development
-
-```bash
-git clone <repository-url>
-cd mcp-jira-confluence
-npm install
-npm run build
-npm start
-```
-
-**Verify server is running:**
-
-```bash
-curl http://127.0.0.1:3000/health
-```
+Verbose logs include:
+- Configuration loading details
+- HTTP request/response details
+- MCP request/response payloads
+- Connection lifecycle events
+- Server startup/shutdown events
 
 ---
 
@@ -122,11 +138,9 @@ curl http://127.0.0.1:3000/health
 
 **Connect URL:** `http://127.0.0.1:3000/mcp`
 
-### Claude Desktop
+Configure your MCP client to connect to the server:
 
-Edit your config file:
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+### Claude Desktop
 
 ```json
 {
@@ -146,6 +160,21 @@ Add to `.vscode/mcp.json`:
 ```json
 {
   "servers": {
+    "jira-confluence": {
+      "type": "http",
+      "url": "http://127.0.0.1:3000/mcp"
+    }
+  }
+}
+```
+
+### Zed
+
+Add to `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
     "jira-confluence": {
       "type": "http",
       "url": "http://127.0.0.1:3000/mcp"
@@ -217,6 +246,12 @@ tests/
 
 ## Troubleshooting
 
+```
+# Validate permissions
+npm run validate
+```
+
+
 ### Connection Issues
 
 | Issue | Fix |
@@ -226,29 +261,6 @@ tests/
 | `401 Unauthorized` | Regenerate API token |
 | `403 Forbidden` | Check space/project permissions |
 
-### Common Errors
-
-| Error | Solution |
-|---|---|
-| Port 3000 in use | Set `MCP_PORT=8080` |
-| Space guard rejection | Check `CONFLUENCE_SPACE_KEY` matches target |
-| Project guard rejection | Check `JIRA_PROJECT_KEY` matches target |
-| Transition not found | Use `jira_get_transitions` first |
-
-**Debug Commands:**
-```bash
-# Check server health
-curl http://127.0.0.1:3000/health
-
-# List all tools
-curl -X POST http://127.0.0.1:3000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-
-# Validate permissions
-npm run validate -- [pageId] [issueKey]
-```
 
 ---
 
