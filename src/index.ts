@@ -193,16 +193,22 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`  Health check : http://${HOST}:${PORT}/health`);
   console.log(`  Space scope  : ${config.spaceKey ?? "(all spaces)"}`);
   console.log(`  Jira project : ${jiraConfig.projectKey ?? "(all projects)"}`);
+  if (VERBOSE) {
+    console.log(`  Verbose mode : ENABLED`);
+  }
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("  Ready. Connect your AI client to the MCP endpoint.");
   console.log("  Tools        : Confluence (7) + Jira (6)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  log("Server started successfully");
 });
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
+    logError(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
     console.error(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
   } else {
+    logError("HTTP server error:", err.message);
     console.error("HTTP server error:", err.message);
   }
   process.exit(1);
@@ -210,9 +216,11 @@ httpServer.on("error", (err: NodeJS.ErrnoException) => {
 
 // Graceful shutdown with timeout
 function shutdown() {
+  log("Shutdown signal received");
   console.log("\nShutting down...");
   
   // Close all active connections immediately
+  log(`Closing ${activeConnections.size} active connections...`);
   for (const conn of activeConnections) {
     if (!conn.destroyed) {
       conn.destroy();
@@ -222,6 +230,7 @@ function shutdown() {
   
   // Force exit after 1 second if server hasn't closed
   const forceExitTimer = setTimeout(() => {
+    log("Force closing server after timeout");
     console.log("Force closing server...");
     process.exit(0);
   }, 1000);
@@ -229,6 +238,7 @@ function shutdown() {
   // Try graceful shutdown
   httpServer.close(() => {
     clearTimeout(forceExitTimer);
+    log("Server closed gracefully");
     console.log("Server closed gracefully.");
     process.exit(0);
   });
