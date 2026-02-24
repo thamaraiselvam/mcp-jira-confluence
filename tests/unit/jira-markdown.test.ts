@@ -1,0 +1,326 @@
+import { describe, it, expect } from "vitest";
+import { markdownToAdf } from "../../src/jira-markdown.js";
+
+describe("jira-markdown — markdownToAdf()", () => {
+  describe("empty input", () => {
+    it("returns empty document for empty string", () => {
+      const result = markdownToAdf("");
+      expect(result).toEqual({
+        type: "doc",
+        version: 1,
+        content: [],
+      });
+    });
+
+    it("returns empty document for whitespace only", () => {
+      const result = markdownToAdf("   \n  \n  ");
+      expect(result).toEqual({
+        type: "doc",
+        version: 1,
+        content: [],
+      });
+    });
+  });
+
+  describe("headings", () => {
+    it("converts h1 heading", () => {
+      const result = markdownToAdf("# Main Title");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "heading",
+        attrs: { level: 1 },
+        content: [{ type: "text", text: "Main Title" }],
+      });
+    });
+
+    it("converts h2 heading", () => {
+      const result = markdownToAdf("## Section Title");
+      expect(result.content[0]).toEqual({
+        type: "heading",
+        attrs: { level: 2 },
+        content: [{ type: "text", text: "Section Title" }],
+      });
+    });
+
+    it("converts h3 heading", () => {
+      const result = markdownToAdf("### Subsection");
+      expect(result.content[0]).toEqual({
+        type: "heading",
+        attrs: { level: 3 },
+        content: [{ type: "text", text: "Subsection" }],
+      });
+    });
+
+    it("converts h6 heading", () => {
+      const result = markdownToAdf("###### Small Heading");
+      expect(result.content[0]).toEqual({
+        type: "heading",
+        attrs: { level: 6 },
+        content: [{ type: "text", text: "Small Heading" }],
+      });
+    });
+
+    it("handles heading with inline formatting", () => {
+      const result = markdownToAdf("## **Bold** Heading");
+      expect(result.content[0].content).toEqual([
+        { type: "text", text: "Bold", marks: [{ type: "strong" }] },
+        { type: "text", text: " Heading" },
+      ]);
+    });
+  });
+
+  describe("paragraphs", () => {
+    it("converts simple paragraph", () => {
+      const result = markdownToAdf("This is a simple paragraph.");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "paragraph",
+        content: [{ type: "text", text: "This is a simple paragraph." }],
+      });
+    });
+
+    it("converts multiple paragraphs separated by blank lines", () => {
+      const result = markdownToAdf("First paragraph.\n\nSecond paragraph.");
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("paragraph");
+    });
+
+    it("preserves line breaks within a paragraph", () => {
+      const result = markdownToAdf("Line one\nLine two");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].content[0].text).toBe("Line one\nLine two");
+    });
+  });
+
+  describe("inline formatting", () => {
+    it("converts bold with **", () => {
+      const result = markdownToAdf("This is **bold** text.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "bold",
+        marks: [{ type: "strong" }],
+      });
+    });
+
+    it("converts bold with __", () => {
+      const result = markdownToAdf("This is __bold__ text.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "bold",
+        marks: [{ type: "strong" }],
+      });
+    });
+
+    it("converts italic with *", () => {
+      const result = markdownToAdf("This is *italic* text.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "italic",
+        marks: [{ type: "em" }],
+      });
+    });
+
+    it("converts italic with _", () => {
+      const result = markdownToAdf("This is _italic_ text.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "italic",
+        marks: [{ type: "em" }],
+      });
+    });
+
+    it("converts inline code", () => {
+      const result = markdownToAdf("Use `console.log()` for debugging.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "console.log()",
+        marks: [{ type: "code" }],
+      });
+    });
+
+    it("converts links", () => {
+      const result = markdownToAdf("Visit [GitHub](https://github.com) now.");
+      const content = result.content[0].content;
+      expect(content).toContainEqual({
+        type: "text",
+        text: "GitHub",
+        marks: [{ type: "link", attrs: { href: "https://github.com" } }],
+      });
+    });
+
+    it("handles multiple inline formats", () => {
+      const result = markdownToAdf("**Bold** and *italic* and `code`.");
+      const content = result.content[0].content;
+      expect(content[0]).toEqual({
+        type: "text",
+        text: "Bold",
+        marks: [{ type: "strong" }],
+      });
+      expect(content[2]).toEqual({
+        type: "text",
+        text: "italic",
+        marks: [{ type: "em" }],
+      });
+      expect(content[4]).toEqual({
+        type: "text",
+        text: "code",
+        marks: [{ type: "code" }],
+      });
+    });
+  });
+
+  describe("bullet lists", () => {
+    it("converts bullet list with *", () => {
+      const result = markdownToAdf("* Item 1\n* Item 2\n* Item 3");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe("bulletList");
+      expect(result.content[0].content).toHaveLength(3);
+      expect(result.content[0].content[0].content[0].content[0].text).toBe("Item 1");
+    });
+
+    it("converts bullet list with -", () => {
+      const result = markdownToAdf("- First\n- Second");
+      expect(result.content[0].type).toBe("bulletList");
+      expect(result.content[0].content).toHaveLength(2);
+    });
+
+    it("converts bullet list with +", () => {
+      const result = markdownToAdf("+ Alpha\n+ Beta");
+      expect(result.content[0].type).toBe("bulletList");
+      expect(result.content[0].content).toHaveLength(2);
+    });
+
+    it("handles bullet list items with inline formatting", () => {
+      const result = markdownToAdf("* **Bold** item\n* *Italic* item");
+      const firstItem = result.content[0].content[0].content[0].content;
+      expect(firstItem[0]).toEqual({
+        type: "text",
+        text: "Bold",
+        marks: [{ type: "strong" }],
+      });
+    });
+  });
+
+  describe("ordered lists", () => {
+    it("converts ordered list", () => {
+      const result = markdownToAdf("1. First\n2. Second\n3. Third");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe("orderedList");
+      expect(result.content[0].content).toHaveLength(3);
+    });
+
+    it("handles ordered list with non-sequential numbers", () => {
+      const result = markdownToAdf("1. Item A\n5. Item B\n10. Item C");
+      expect(result.content[0].type).toBe("orderedList");
+      expect(result.content[0].content).toHaveLength(3);
+    });
+  });
+
+  describe("code blocks", () => {
+    it("converts code block without language", () => {
+      const result = markdownToAdf("```\nconsole.log('hello');\n```");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe("codeBlock");
+      expect(result.content[0].content[0].text).toBe("console.log('hello');");
+    });
+
+    it("converts code block with language", () => {
+      const result = markdownToAdf("```javascript\nconst x = 42;\n```");
+      expect(result.content[0].type).toBe("codeBlock");
+      expect(result.content[0].attrs).toEqual({ language: "javascript" });
+      expect(result.content[0].content[0].text).toBe("const x = 42;");
+    });
+
+    it("preserves multiple lines in code block", () => {
+      const result = markdownToAdf("```\nline 1\nline 2\nline 3\n```");
+      expect(result.content[0].content[0].text).toBe("line 1\nline 2\nline 3");
+    });
+
+    it("handles empty code block", () => {
+      const result = markdownToAdf("```\n```");
+      expect(result.content[0].type).toBe("codeBlock");
+      expect(result.content[0].content[0].text).toBe("");
+    });
+  });
+
+  describe("mixed content", () => {
+    it("converts heading followed by paragraph", () => {
+      const result = markdownToAdf("# Title\n\nSome content.");
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe("heading");
+      expect(result.content[1].type).toBe("paragraph");
+    });
+
+    it("converts paragraph, list, and code block", () => {
+      const md = "Intro text.\n\n* Item 1\n* Item 2\n\n```\ncode\n```";
+      const result = markdownToAdf(md);
+      expect(result.content).toHaveLength(3);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("bulletList");
+      expect(result.content[2].type).toBe("codeBlock");
+    });
+
+    it("handles complex story description", () => {
+      const md = `# User Story
+
+## Description
+As a user, I want to **login** to the system.
+
+## Acceptance Criteria
+* User can enter username
+* User can enter password
+* Click \`Submit\` button
+
+## Technical Notes
+\`\`\`javascript
+const login = (user, pass) => {
+  return api.authenticate(user, pass);
+};
+\`\`\``;
+
+      const result = markdownToAdf(md);
+      expect(result.content.length).toBeGreaterThan(5);
+      expect(result.content[0].type).toBe("heading");
+      expect(result.content[0].attrs.level).toBe(1);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("handles heading without space after #", () => {
+      const result = markdownToAdf("#NoSpace");
+      // Should not be treated as heading
+      expect(result.content[0].type).toBe("paragraph");
+    });
+
+    it("handles multiple blank lines", () => {
+      const result = markdownToAdf("Para 1\n\n\n\nPara 2");
+      expect(result.content).toHaveLength(2);
+    });
+
+    it("handles text with # in middle", () => {
+      const result = markdownToAdf("This is not a # heading.");
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[0].content[0].text).toContain("#");
+    });
+
+    it("handles unclosed code block", () => {
+      const result = markdownToAdf("```\ncode without closing");
+      expect(result.content[0].type).toBe("codeBlock");
+      expect(result.content[0].content[0].text).toBe("code without closing");
+    });
+
+    it("handles list interrupted by paragraph", () => {
+      const result = markdownToAdf("* Item 1\n\nParagraph\n\n* Item 2");
+      expect(result.content).toHaveLength(3);
+      expect(result.content[0].type).toBe("bulletList");
+      expect(result.content[1].type).toBe("paragraph");
+      expect(result.content[2].type).toBe("bulletList");
+    });
+  });
+});

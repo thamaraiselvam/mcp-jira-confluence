@@ -1,0 +1,55 @@
+{
+  "name": "mcp-jira-confluence",
+  "version": "1.0.0",
+  "description": "A custom MCP Server to interact with Jira and Confluence",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-jira-confluence": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    ".env.example"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "dev:http": "tsc && MCP_PORT=3000 node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "validate": "tsc && node dist/validate.js",
+    "prepare": "npm run build",
+    "postinstall": "chmod +x dist/index.js 2>/dev/null || true"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.15.21",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.18"
+  },
+  "keywords": [
+    "mcp",
+    "jira",
+    "confluence",
+    "atlassian"
+  ],
+  "author": "Thamaraiselvam T",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thamaraiselvam/mcp-jira-confluence"
+  },
+  "license": "MIT"
+}
