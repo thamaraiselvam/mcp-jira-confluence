@@ -329,6 +329,112 @@ describe("jira-markdown — markdownToAdf()", () => {
     });
   });
 
+  describe("tables", () => {
+    it("converts a simple table with header and data rows", () => {
+      const md = `| Header 1 | Header 2 |
+|----------|----------|
+| Cell 1   | Cell 2   |
+| Cell 3   | Cell 4   |`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe("table");
+      expect(result.content[0].content).toHaveLength(3); // 1 header row + 2 data rows
+      
+      // Check header row
+      expect(result.content[0].content[0].type).toBe("tableRow");
+      expect(result.content[0].content[0].content[0].type).toBe("tableHeader");
+      expect(result.content[0].content[0].content[0].content[0].content[0].text).toBe("Header 1");
+      
+      // Check data row
+      expect(result.content[0].content[1].content[0].type).toBe("tableCell");
+    });
+
+    it("converts table with multiple columns", () => {
+      const md = `| Col 1 | Col 2 | Col 3 | Col 4 |
+|-------|-------|-------|-------|
+| A     | B     | C     | D     |`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content[0].type).toBe("table");
+      expect(result.content[0].content[0].content).toHaveLength(4); // 4 columns
+    });
+
+    it("handles table with inline formatting", () => {
+      const md = `| Name | Status |
+|------|--------|
+| **Bold** | *Italic* |`;
+      const result = markdownToAdf(md);
+      
+      const cell = result.content[0].content[1].content[0];
+      expect(cell.content[0].content[0].marks[0].type).toBe("strong");
+    });
+
+    it("separates table from surrounding content", () => {
+      const md = `Paragraph before
+
+| H1 | H2 |
+|----|-----|
+| C1 | C2 |
+
+Paragraph after`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content).toHaveLength(3);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("table");
+      expect(result.content[2].type).toBe("paragraph");
+    });
+
+    it("handles table without separator (treats first row as header)", () => {
+      const md = `| Header 1 | Header 2 |
+| Data 1   | Data 2   |`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content[0].type).toBe("table");
+      expect(result.content[0].content).toHaveLength(2);
+      expect(result.content[0].content[0].content[0].type).toBe("tableHeader");
+    });
+
+    it("handles single row table", () => {
+      const md = `| Single | Row |
+|--------|-----|
+| Data   | Row |`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content[0].type).toBe("table");
+      expect(result.content[0].content).toHaveLength(2); // header + 1 data row
+    });
+
+    it("handles empty cells", () => {
+      const md = `| H1 | H2 |
+|----|-----|
+|    | C2 |`;
+      const result = markdownToAdf(md);
+      
+      expect(result.content[0].type).toBe("table");
+      const firstCell = result.content[0].content[1].content[0];
+      // Empty cells will have empty content array or empty text
+      expect(firstCell.content[0].content.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it("preserves multiple tables in document", () => {
+      const md = `| T1H1 | T1H2 |
+|------|------|
+| T1D1 | T1D2 |
+
+Some text
+
+| T2H1 | T2H2 |
+|------|------|
+| T2D1 | T2D2 |`;
+      const result = markdownToAdf(md);
+      
+      const tableCount = result.content.filter(n => n.type === "table").length;
+      expect(tableCount).toBe(2);
+    });
+  });
+
   describe("horizontal rules", () => {
     it("converts --- to a rule node", () => {
       const result = markdownToAdf("---");

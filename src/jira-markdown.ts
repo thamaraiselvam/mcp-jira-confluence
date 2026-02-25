@@ -80,6 +80,31 @@ export function markdownToAdf(markdown: string): Record<string, unknown> {
       continue;
     }
 
+    // Handle tables (| col1 | col2 |)
+    if (trimmedLine.startsWith("|") && trimmedLine.endsWith("|")) {
+      flushParagraph();
+      flushList();
+      
+      // Collect table rows
+      const tableLines: string[] = [trimmedLine];
+      while (i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim();
+        if (nextLine.startsWith("|") && nextLine.endsWith("|")) {
+          tableLines.push(nextLine);
+          i++;
+        } else {
+          break;
+        }
+      }
+      
+      // Parse and create table
+      const tableNode = parseTable(tableLines);
+      if (tableNode) {
+        content.push(tableNode);
+      }
+      continue;
+    }
+
     // Handle horizontal rules (---, ***, ___)
     if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmedLine)) {
       flushParagraph();
@@ -233,6 +258,99 @@ function createList(items: string[], listType: "bulletList" | "orderedList"): Ad
         },
       ],
     })),
+  };
+}
+
+/**
+ * Parse a markdown table into ADF table structure.
+ * Expects table lines in format: | col1 | col2 |
+ */
+function parseTable(tableLines: string[]): AdfNode | null {
+  if (tableLines.length < 2) {
+    return null;
+  }
+
+  // Parse cells from a row
+  const parseCells = (line: string): string[] => {
+    return line
+      .split("|")
+      .slice(1, -1) // Remove first and last empty strings
+      .map((cell) => cell.trim());
+  };
+
+  const rows: string[][] = [];
+  let headerRow: string[] | null = null;
+  let separatorFound = false;
+
+  for (let i = 0; i < tableLines.length; i++) {
+    const line = tableLines[i];
+    
+    // Check if this is a separator line (|---|---|)
+    if (/^\|[\s\-:|]+\|$/.test(line)) {
+      separatorFound = true;
+      // The previous row is the header
+      if (i > 0 && rows.length > 0) {
+        headerRow = rows.pop() || null;
+      }
+      continue;
+    }
+
+    rows.push(parseCells(line));
+  }
+
+  // If no separator found, treat first row as header
+  if (!separatorFound && rows.length > 0) {
+    headerRow = rows.shift() || null;
+  }
+
+  // Build ADF table structure
+  const tableRows: AdfNode[] = [];
+
+  // Add header row if exists
+  if (headerRow) {
+    tableRows.push({
+      type: "tableRow",
+      content: headerRow.map((cellText) => ({
+        type: "tableHeader",
+        attrs: {},
+        content: [
+          {
+            type: "paragraph",
+            content: parseInlineContent(cellText),
+          },
+        ],
+      })),
+    });
+  }
+
+  // Add data rows
+  rows.forEach((row) => {
+    tableRows.push({
+      type: "tableRow",
+      content: row.map((cellText) => ({
+        type: "tableCell",
+        attrs: {},
+        content: [
+          {
+            type: "paragraph",
+            content: parseInlineContent(cellText),
+          },
+        ],
+      })),
+    });
+  });
+
+  if (tableRows.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "table",
+    attrs: {
+      isNumberColumnEnabled: false,
+      layout: "default",
+    },
+    content: tableRows,
   };
 }
 
