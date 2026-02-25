@@ -206,7 +206,7 @@ export function registerTools(
         {
           name: "jira_create_issue",
           description:
-            "Create a new Jira issue (Story, Bug, Task, etc.) in a given project. Supports setting summary, description, assignee, priority, and labels.",
+            "Create a new Jira issue (Story, Bug, Task, etc.) in a given project. New issues are created unassigned by default. Supports setting summary, description, assignee, priority, and labels.",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -232,7 +232,7 @@ export function registerTools(
               assigneeAccountId: {
                 type: "string",
                 description:
-                  "Optional. The Atlassian account ID of the user to assign the issue to.",
+                  "Optional. The Atlassian account ID of the user to assign the issue to. Leave empty/undefined for unassigned (default). When cloning issues, do NOT copy the assignee - new issues should remain unassigned.",
               },
               priority: {
                 type: "string",
