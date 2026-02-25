@@ -1630,12 +1630,53 @@ describe("tools — registerTools()", () => {
       const result = await handlers.callTool!({
         params: {
           name: "jira_create_issue",
-          arguments: { projectKey: "TEST", issueType: "Bug", summary: "Test" },
+          arguments: { 
+            projectKey: "TEST", 
+            issueType: "Bug", 
+            summary: "Test",
+            description: "Test description" 
+          },
         },
       });
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Error creating Jira issue");
+    });
+
+    it("returns error when description is missing", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_create_issue",
+          arguments: { 
+            projectKey: "TEST", 
+            issueType: "Bug", 
+            summary: "Test" 
+          },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text as string;
+      expect(text).toContain("Description is required");
+      expect(text).toContain("markdown-formatted description");
+    });
+
+    it("returns error when description is empty", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_create_issue",
+          arguments: { 
+            projectKey: "TEST", 
+            issueType: "Bug", 
+            summary: "Test",
+            description: "   " 
+          },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text as string;
+      expect(text).toContain("Description is required");
     });
   });
 
@@ -1679,6 +1720,44 @@ describe("tools — registerTools()", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Error updating Jira issue");
+    });
+
+    it("returns error when updating description with empty string", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_issue",
+          arguments: { 
+            issueIdOrKey: "TEST-999", 
+            fields: { description: "   " } 
+          },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text as string;
+      expect(text).toContain("Invalid description");
+      expect(text).toContain("non-empty markdown-formatted string");
+    });
+
+    it("allows clearing description with null", async () => {
+      mockedJiraUpdateIssue.mockResolvedValue({ key: "TEST-789", fields: {} } as any);
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_issue",
+          arguments: { 
+            issueIdOrKey: "TEST-999", 
+            fields: { description: null } 
+          },
+        },
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(mockedJiraUpdateIssue).toHaveBeenCalledWith(
+        jiraClient,
+        "TEST-999",
+        { description: null }
+      );
     });
   });
 

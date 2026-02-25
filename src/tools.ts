@@ -58,7 +58,7 @@ export function registerTools(
         {
           name: "create_confluence_page",
           description:
-            "Create a new Confluence page in a given space. Accepts Markdown content which is converted to Confluence storage format (HTML). Optionally nest the page under a parent page.",
+            "Create a new Confluence page in a given space. REQUIRED: Always provide Markdown content. Supports headers, lists, bold, italic, code blocks, tables, links, images, and more. Content is automatically converted to Confluence storage format (HTML). Optionally nest the page under a parent page.",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -72,7 +72,7 @@ export function registerTools(
               },
               markdownContent: {
                 type: "string",
-                description: "The page body in Markdown format. This will be converted to HTML for Confluence.",
+                description: "REQUIRED. The page body in Markdown format. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code blocks (```), tables (| col |), links ([text](url)), and images. This will be converted to HTML for Confluence.",
               },
               parentPageId: {
                 type: "string",
@@ -85,7 +85,7 @@ export function registerTools(
         {
           name: "update_confluence_page",
           description:
-            "Update an existing Confluence page. Accepts Markdown content which is converted to Confluence storage format (HTML). Automatically handles version bumping.",
+            "Update an existing Confluence page. REQUIRED: Always provide Markdown content. Supports headers, lists, bold, italic, code blocks, tables, links, images, and more. Content is automatically converted to Confluence storage format (HTML). Automatically handles version bumping.",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -100,7 +100,7 @@ export function registerTools(
               markdownContent: {
                 type: "string",
                 description:
-                  "The page body content in Markdown format. This will be converted to HTML for Confluence.",
+                  "REQUIRED. The page body content in Markdown format. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code blocks (```), tables (| col |), links ([text](url)), and images. This will be converted to HTML for Confluence.",
               },
             },
             required: ["pageId", "title", "markdownContent"],
@@ -109,7 +109,7 @@ export function registerTools(
         {
           name: "add_confluence_comment",
           description:
-            "Add an inline comment to an existing Confluence page. Accepts Markdown content which is converted to Confluence storage format (HTML).",
+            "Add an inline comment to an existing Confluence page. REQUIRED: Always provide Markdown content. Supports bold, italic, links, and basic formatting. Content is automatically converted to Confluence storage format (HTML).",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -119,7 +119,7 @@ export function registerTools(
               },
               markdownContent: {
                 type: "string",
-                description: "The comment body in Markdown format. This will be converted to HTML for Confluence.",
+                description: "REQUIRED. The comment body in Markdown format. Use bold (**text**), italic (*text*), links ([text](url)), and basic formatting. This will be converted to HTML for Confluence.",
               },
             },
             required: ["pageId", "markdownContent"],
@@ -206,7 +206,7 @@ export function registerTools(
         {
           name: "jira_create_issue",
           description:
-            "Create a new Jira issue (Story, Bug, Task, etc.) in a given project. New issues are created unassigned by default. Supports setting summary, description, assignee, priority, and labels.",
+            "Create a new Jira issue (Story, Bug, Task, etc.) in a given project. New issues are created unassigned by default. REQUIRED: Always provide a markdown-formatted description.",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -227,7 +227,7 @@ export function registerTools(
               description: {
                 type: "string",
                 description:
-                  "Optional. Markdown-formatted description for the issue (supports headers, lists, bold, italic, code, links). Automatically converted to Atlassian Document Format (ADF) for Jira Cloud.",
+                  "REQUIRED. Markdown-formatted description for the issue. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, blockquotes (>), and horizontal rules (---). Automatically converted to Atlassian Document Format (ADF) for Jira Cloud.",
               },
               assigneeAccountId: {
                 type: "string",
@@ -245,13 +245,13 @@ export function registerTools(
                 description: "Optional. List of label strings to attach to the issue.",
               },
             },
-            required: ["projectKey", "issueType", "summary"],
+            required: ["projectKey", "issueType", "summary", "description"],
           },
         },
         {
           name: "jira_update_issue",
           description:
-            "Update one or more fields on an existing Jira issue. Provide only the fields you want to change. Supports summary, description (Markdown format), assignee (accountId), priority, labels, and any other valid Jira field.",
+            "Update one or more fields on an existing Jira issue. Provide only the fields you want to change. When updating description, ALWAYS use Markdown format. Supports summary, description (Markdown format), assignee (accountId), priority, labels, and any other valid Jira field.",
           inputSchema: {
             type: "object" as const,
             properties: {
@@ -263,7 +263,7 @@ export function registerTools(
               fields: {
                 type: "object",
                 description:
-                  "An object containing the fields to update. Well-known keys: 'summary' (string), 'description' (Markdown string or null to clear), 'assignee' (accountId string or null to unassign), 'priority' (name string), 'labels' (string[]). Any other valid Jira field can also be included.",
+                  "An object containing the fields to update. Well-known keys: 'summary' (string), 'description' (REQUIRED when updating - Markdown string with headers, lists, tables, formatting; or null to clear), 'assignee' (accountId string or null to unassign), 'priority' (name string), 'labels' (string[]). Any other valid Jira field can also be included.",
                 additionalProperties: true,
               },
             },
@@ -696,6 +696,26 @@ export function registerTools(
         const priority = args?.priority as string | undefined;
         const labels = args?.labels as string[] | undefined;
 
+        // Enforce markdown description requirement
+        if (!description || description.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    error: "Description is required",
+                    message: "You must provide a markdown-formatted description when creating Jira issues. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, and other markdown features.",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
         try {
           const createResponse = await createJiraIssue(
             jiraClient,
@@ -741,6 +761,29 @@ export function registerTools(
       case "jira_update_issue": {
         const issueIdOrKey = args?.issueIdOrKey as string;
         const fields = args?.fields as Record<string, unknown>;
+
+        // Enforce markdown description requirement when updating description
+        if (fields && "description" in fields && fields.description !== null) {
+          const desc = fields.description;
+          if (typeof desc === "string" && desc.trim().length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    {
+                      error: "Invalid description",
+                      message: "When updating description, you must provide a non-empty markdown-formatted string. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, and other markdown features. Set to null to clear the description.",
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
 
         try {
           const updateResponse = await updateJiraIssue(
