@@ -173,6 +173,86 @@ describe("jira-markdown — markdownToAdf()", () => {
         marks: [{ type: "code" }],
       });
     });
+
+    it("converts bold and italic combined (***text***)", () => {
+      const result = markdownToAdf("***bold and italic***");
+      expect(result.content[0].content[0]).toEqual({
+        type: "text",
+        text: "bold and italic",
+        marks: [{ type: "strong" }, { type: "em" }],
+      });
+    });
+
+    it("converts bold and italic combined with underscores (___text___)", () => {
+      const result = markdownToAdf("___bold and italic___");
+      expect(result.content[0].content[0]).toEqual({
+        type: "text",
+        text: "bold and italic",
+        marks: [{ type: "strong" }, { type: "em" }],
+      });
+    });
+
+    it("converts strikethrough (~~text~~)", () => {
+      const result = markdownToAdf("~~strikethrough text~~");
+      expect(result.content[0].content[0]).toEqual({
+        type: "text",
+        text: "strikethrough text",
+        marks: [{ type: "strike" }],
+      });
+    });
+
+    it("handles mixed bold, italic, and strikethrough", () => {
+      const result = markdownToAdf("**bold** and ~~strike~~ and *italic*");
+      const content = result.content[0].content;
+      expect(content[0].marks[0].type).toBe("strong");
+      expect(content[2].marks[0].type).toBe("strike");
+      expect(content[4].marks[0].type).toBe("em");
+    });
+  });
+
+  describe("blockquotes", () => {
+    it("converts single line blockquote", () => {
+      const result = markdownToAdf("> This is a quote");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "blockquote",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "This is a quote" }],
+          },
+        ],
+      });
+    });
+
+    it("converts multi-line blockquote", () => {
+      const result = markdownToAdf("> Line one\n> Line two\n> Line three");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe("blockquote");
+      expect(result.content[0].content[0].content[0].text).toContain("Line one");
+      expect(result.content[0].content[0].content[0].text).toContain("Line two");
+    });
+
+    it("converts blockquote with inline formatting", () => {
+      const result = markdownToAdf("> **Bold** in quote");
+      expect(result.content[0].type).toBe("blockquote");
+      expect(result.content[0].content[0].content[0].marks[0].type).toBe("strong");
+    });
+
+    it("separates blockquote from paragraphs", () => {
+      const result = markdownToAdf("Paragraph\n\n> Quote\n\nAnother paragraph");
+      expect(result.content).toHaveLength(3);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("blockquote");
+      expect(result.content[2].type).toBe("paragraph");
+    });
+
+    it("handles empty blockquote line", () => {
+      const result = markdownToAdf(">");
+      expect(result.content[0].type).toBe("blockquote");
+      // Empty blockquote should have a paragraph but might not have text nodes
+      expect(result.content[0].content[0].type).toBe("paragraph");
+    });
   });
 
   describe("bullet lists", () => {
@@ -246,6 +326,73 @@ describe("jira-markdown — markdownToAdf()", () => {
       const result = markdownToAdf("```\n```");
       expect(result.content[0].type).toBe("codeBlock");
       expect(result.content[0].content[0].text).toBe("");
+    });
+  });
+
+  describe("horizontal rules", () => {
+    it("converts --- to a rule node", () => {
+      const result = markdownToAdf("---");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "rule",
+      });
+    });
+
+    it("converts *** to a rule node", () => {
+      const result = markdownToAdf("***");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "rule",
+      });
+    });
+
+    it("converts ___ to a rule node", () => {
+      const result = markdownToAdf("___");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "rule",
+      });
+    });
+
+    it("converts longer sequences (----) to a rule node", () => {
+      const result = markdownToAdf("------");
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toEqual({
+        type: "rule",
+      });
+    });
+
+    it("separates paragraphs with horizontal rule", () => {
+      const result = markdownToAdf("First paragraph.\n\n---\n\nSecond paragraph.");
+      expect(result.content).toHaveLength(3);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("rule");
+      expect(result.content[2].type).toBe("paragraph");
+    });
+
+    it("handles multiple horizontal rules", () => {
+      const result = markdownToAdf("Para 1\n\n---\n\nPara 2\n\n***\n\nPara 3");
+      expect(result.content).toHaveLength(5);
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[1].type).toBe("rule");
+      expect(result.content[2].type).toBe("paragraph");
+      expect(result.content[3].type).toBe("rule");
+      expect(result.content[4].type).toBe("paragraph");
+    });
+
+    it("does not treat -- (two dashes) as horizontal rule", () => {
+      const result = markdownToAdf("--");
+      expect(result.content[0].type).toBe("paragraph");
+      expect(result.content[0].content[0].text).toBe("--");
+    });
+
+    it("handles horizontal rule with text before and after", () => {
+      const result = markdownToAdf("# Heading\n\nText\n\n---\n\nMore text");
+      expect(result.content).toHaveLength(4);
+      expect(result.content[0].type).toBe("heading");
+      expect(result.content[1].type).toBe("paragraph");
+      expect(result.content[2].type).toBe("rule");
+      expect(result.content[3].type).toBe("paragraph");
     });
   });
 

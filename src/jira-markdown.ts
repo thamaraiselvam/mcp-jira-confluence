@@ -80,6 +80,35 @@ export function markdownToAdf(markdown: string): Record<string, unknown> {
       continue;
     }
 
+    // Handle horizontal rules (---, ***, ___)
+    if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmedLine)) {
+      flushParagraph();
+      flushList();
+      content.push(createHorizontalRule());
+      continue;
+    }
+
+    // Handle blockquotes (> text)
+    const blockquoteMatch = line.match(/^>\s*(.*)$/);
+    if (blockquoteMatch) {
+      flushParagraph();
+      flushList();
+      // Collect all consecutive blockquote lines
+      const blockquoteLines: string[] = [blockquoteMatch[1]];
+      while (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        const nextMatch = nextLine.match(/^>\s*(.*)$/);
+        if (nextMatch) {
+          blockquoteLines.push(nextMatch[1]);
+          i++;
+        } else {
+          break;
+        }
+      }
+      content.push(createBlockquote(blockquoteLines.join("\n")));
+      continue;
+    }
+
     // Handle headings (h1-h6)
     const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
@@ -141,6 +170,24 @@ export function markdownToAdf(markdown: string): Record<string, unknown> {
   };
 }
 
+function createHorizontalRule(): AdfNode {
+  return {
+    type: "rule",
+  };
+}
+
+function createBlockquote(text: string): AdfNode {
+  return {
+    type: "blockquote",
+    content: [
+      {
+        type: "paragraph",
+        content: parseInlineContent(text),
+      },
+    ],
+  };
+}
+
 function createHeading(text: string, level: number): AdfNode {
   return {
     type: "heading",
@@ -190,7 +237,7 @@ function createList(items: string[], listType: "bulletList" | "orderedList"): Ad
 }
 
 /**
- * Parse inline content (bold, italic, code, links).
+ * Parse inline content (bold, italic, code, links, strikethrough).
  * Returns an array of text nodes with optional marks.
  */
 function parseInlineContent(text: string): AdfNode[] {
@@ -199,6 +246,18 @@ function parseInlineContent(text: string): AdfNode[] {
   let pos = 0;
 
   while (pos < remaining.length) {
+    // Bold + Italic: ***text*** or ___text___
+    const boldItalicMatch = remaining.slice(pos).match(/^(\*{3}|_{3})(.+?)\1/);
+    if (boldItalicMatch) {
+      nodes.push({
+        type: "text",
+        text: boldItalicMatch[2],
+        marks: [{ type: "strong" }, { type: "em" }],
+      });
+      pos += boldItalicMatch[0].length;
+      continue;
+    }
+
     // Bold: **text** or __text__
     const boldMatch = remaining.slice(pos).match(/^(\*\*|__)(.+?)\1/);
     if (boldMatch) {
@@ -220,6 +279,18 @@ function parseInlineContent(text: string): AdfNode[] {
         marks: [{ type: "em" }],
       });
       pos += italicMatch[0].length;
+      continue;
+    }
+
+    // Strikethrough: ~~text~~
+    const strikeMatch = remaining.slice(pos).match(/^~~(.+?)~~/);
+    if (strikeMatch) {
+      nodes.push({
+        type: "text",
+        text: strikeMatch[1],
+        marks: [{ type: "strike" }],
+      });
+      pos += strikeMatch[0].length;
       continue;
     }
 
