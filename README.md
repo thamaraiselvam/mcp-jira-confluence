@@ -1,5 +1,12 @@
 # Jira & Confluence MCP Server
 
+[![Tests](https://github.com/thamaraiselvam/mcp-jira-confluence/workflows/Tests/badge.svg)](https://github.com/thamaraiselvam/mcp-jira-confluence/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/mcp-jira-confluence.svg?style=flat&color=blue)](https://www.npmjs.com/package/mcp-jira-confluence)
+[![npm downloads](https://img.shields.io/npm/dm/mcp-jira-confluence.svg?style=flat&color=green)](https://www.npmjs.com/package/mcp-jira-confluence)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
+
 A Model Context Protocol (MCP) server that connects AI assistants to Jira and Confluence.
 
 ## Features
