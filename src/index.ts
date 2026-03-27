@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import http from "node:http";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { loadConfig, loadJiraConfig } from "./config.js";
 import { createConfluenceClient, createJiraClient } from "./client.js";
@@ -75,6 +76,14 @@ const bootstrap = (() => {
 })();
 
 const { config, jiraConfig, axiosClient, jiraClient } = bootstrap;
+
+// ---------------------------------------------------------------------------
+// Transport Mode Detection
+// ---------------------------------------------------------------------------
+// Use STDIO if running in a pipe (e.g., from OpenCode, Claude Desktop)
+// Use HTTP if running in a terminal (manual testing)
+const USE_STDIO = !process.stdin.isTTY || process.env.MCP_TRANSPORT === "stdio";
+const USE_HTTP = !USE_STDIO || process.env.MCP_TRANSPORT === "http";
 
 const PORT = parseInt(process.env.MCP_PORT ?? "9339", 10);
 const HOST = "127.0.0.1"; // localhost only — no external access
@@ -211,66 +220,103 @@ const httpServer = http.createServer(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start listening
+// STDIO Transport (for OpenCode, Claude Desktop, etc.)
 // ---------------------------------------------------------------------------
-httpServer.listen(PORT, HOST, () => {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("  MCP Server for Jira & Confluence");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`  MCP endpoint : http://${HOST}:${PORT}/mcp`);
-  console.log(`  Health check : http://${HOST}:${PORT}/health`);
-  console.log(`  Space scope  : ${config.spaceKey ?? "(all spaces)"}`);
-  console.log(`  Jira project : ${jiraConfig.projectKey ?? "(all projects)"}`);
-  if (VERBOSE) {
-    console.log(`  Verbose mode : ENABLED`);
-  }
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("  Ready. Connect your AI client to the MCP endpoint.");
-  console.log("  Tools        : Confluence (7) + Jira (6)");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  log("Server started successfully");
-});
-
-httpServer.on("error", (err: NodeJS.ErrnoException) => {
-  if (err.code === "EADDRINUSE") {
-    logError(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
-    console.error(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
-  } else {
-    logError("HTTP server error:", err.message);
-    console.error("HTTP server error:", err.message);
-  }
-  process.exit(1);
-});
-
-// Graceful shutdown with timeout
-function shutdown() {
-  log("Shutdown signal received");
-  console.log("\nShutting down...");
+async function runStdioMode() {
+  log("Starting in STDIO mode for MCP client");
   
-  // Close all active connections immediately
-  log(`Closing ${activeConnections.size} active connections...`);
-  for (const conn of activeConnections) {
-    if (!conn.destroyed) {
-      conn.destroy();
-    }
-  }
-  activeConnections.clear();
+  const transport = new StdioServerTransport();
+  const mcpServer = createMcpServer();
   
-  // Force exit after 1 second if server hasn't closed
-  const forceExitTimer = setTimeout(() => {
-    log("Force closing server after timeout");
-    console.log("Force closing server...");
-    process.exit(0);
-  }, 1000);
+  await mcpServer.connect(transport);
   
-  // Try graceful shutdown
-  httpServer.close(() => {
-    clearTimeout(forceExitTimer);
-    log("Server closed gracefully");
-    console.log("Server closed gracefully.");
-    process.exit(0);
-  });
+  log("STDIO server connected and ready");
+  
+  // Keep process alive
+  process.stdin.resume();
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+// ---------------------------------------------------------------------------
+// HTTP Transport (for manual testing and remote clients)
+// ---------------------------------------------------------------------------
+async function runHttpMode() {
+  // ---------------------------------------------------------------------------
+  // Start listening
+  // ---------------------------------------------------------------------------
+  httpServer.listen(PORT, HOST, () => {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("  MCP Server for Jira & Confluence");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(`  MCP endpoint : http://${HOST}:${PORT}/mcp`);
+    console.log(`  Health check : http://${HOST}:${PORT}/health`);
+    console.log(`  Space scope  : ${config.spaceKey ?? "(all spaces)"}`);
+    console.log(`  Jira project : ${jiraConfig.projectKey ?? "(all projects)"}`);
+    if (VERBOSE) {
+      console.log(`  Verbose mode : ENABLED`);
+    }
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("  Ready. Connect your AI client to the MCP endpoint.");
+    console.log("  Tools        : Confluence (7) + Jira (6)");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    log("Server started successfully");
+  });
+
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      logError(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
+      console.error(`Port ${PORT} is already in use. Set MCP_PORT=<other> to use a different port.`);
+    } else {
+      logError("HTTP server error:", err.message);
+      console.error("HTTP server error:", err.message);
+    }
+    process.exit(1);
+  });
+
+  // Graceful shutdown with timeout
+  function shutdown() {
+    log("Shutdown signal received");
+    console.log("\nShutting down...");
+    
+    // Close all active connections immediately
+    log(`Closing ${activeConnections.size} active connections...`);
+    for (const conn of activeConnections) {
+      if (!conn.destroyed) {
+        conn.destroy();
+      }
+    }
+    activeConnections.clear();
+    
+    // Force exit after 1 second if server hasn't closed
+    const forceExitTimer = setTimeout(() => {
+      log("Force closing server after timeout");
+      console.log("Force closing server...");
+      process.exit(0);
+    }, 1000);
+    
+    // Try graceful shutdown
+    httpServer.close(() => {
+      clearTimeout(forceExitTimer);
+      log("Server closed gracefully");
+      console.log("Server closed gracefully.");
+      process.exit(0);
+    });
+  }
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+// ---------------------------------------------------------------------------
+// Main: Start server in appropriate mode
+// ---------------------------------------------------------------------------
+if (USE_STDIO) {
+  runStdioMode().catch((err) => {
+    logError("STDIO mode error:", err);
+    process.exit(1);
+  });
+} else {
+  runHttpMode().catch((err) => {
+    logError("HTTP mode error:", err);
+    process.exit(1);
+  });
+}
