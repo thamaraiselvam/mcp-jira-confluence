@@ -1,0 +1,29 @@
+# Source files (we ship compiled JS)
+src/
+tests/
+*.test.ts
+*.test.js
+
+# Config files
+tsconfig.json
+vitest.config.ts
+
+# Development files
+.git/
+.vscode/
+.idea/
+
+# Environment
+.env
+
+# Coverage and logs
+coverage/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo

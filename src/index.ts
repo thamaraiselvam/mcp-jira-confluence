@@ -21,34 +21,62 @@ function logError(...args: unknown[]): void {
   console.error("[ERROR]", new Date().toISOString(), ...args);
 }
 
+function printConfigSetupError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+
+  console.error("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.error("  Configuration Error");
+  console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.error(`  ${message}`);
+  console.error("\n  Set the required environment variables in your shell or .env file:");
+  console.error("  ATLASSIAN_URL=https://your-domain.atlassian.net");
+  console.error("  ATLASSIAN_EMAIL=you@example.com");
+  console.error("  ATLASSIAN_API_TOKEN=your-api-token");
+  console.error("\n  Optional service-specific overrides:");
+  console.error("  CONFLUENCE_URL / CONFLUENCE_EMAIL / CONFLUENCE_API_TOKEN");
+  console.error("  JIRA_URL / JIRA_EMAIL / JIRA_API_TOKEN");
+  console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+}
+
 // ---------------------------------------------------------------------------
 // Bootstrap — load config and create the Axios client once at startup.
 // The MCP Server + Transport are created fresh per-request (stateless mode).
 // ---------------------------------------------------------------------------
-log("Loading configuration...");
-const config = loadConfig();
-log("Confluence config:", { 
-  baseUrl: config.baseUrl, 
-  email: config.email, 
-  spaceKey: config.spaceKey,
-  ignoreTlsErrors: config.ignoreTlsErrors 
-});
+const bootstrap = (() => {
+  try {
+    log("Loading configuration...");
+    const config = loadConfig();
+    log("Confluence config:", {
+      baseUrl: config.baseUrl,
+      email: config.email,
+      spaceKey: config.spaceKey,
+      ignoreTlsErrors: config.ignoreTlsErrors,
+    });
 
-const axiosClient = createConfluenceClient(config);
-log("Confluence client created");
+    const axiosClient = createConfluenceClient(config);
+    log("Confluence client created");
 
-const jiraConfig = loadJiraConfig();
-log("Jira config:", { 
-  baseUrl: jiraConfig.baseUrl, 
-  email: jiraConfig.email, 
-  projectKey: jiraConfig.projectKey,
-  ignoreTlsErrors: jiraConfig.ignoreTlsErrors 
-});
+    const jiraConfig = loadJiraConfig();
+    log("Jira config:", {
+      baseUrl: jiraConfig.baseUrl,
+      email: jiraConfig.email,
+      projectKey: jiraConfig.projectKey,
+      ignoreTlsErrors: jiraConfig.ignoreTlsErrors,
+    });
 
-const jiraClient = createJiraClient(jiraConfig);
-log("Jira client created");
+    const jiraClient = createJiraClient(jiraConfig);
+    log("Jira client created");
 
-const PORT = parseInt(process.env.MCP_PORT ?? "3000", 10);
+    return { config, jiraConfig, axiosClient, jiraClient };
+  } catch (error) {
+    printConfigSetupError(error);
+    process.exit(1);
+  }
+})();
+
+const { config, jiraConfig, axiosClient, jiraClient } = bootstrap;
+
+const PORT = parseInt(process.env.MCP_PORT ?? "9339", 10);
 const HOST = "127.0.0.1"; // localhost only — no external access
 
 // Track active connections for proper cleanup

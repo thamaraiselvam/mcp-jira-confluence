@@ -1,15 +1,29 @@
 {
   "name": "mcp-jira-confluence",
   "version": "1.0.0",
-  "description": "A custom MCP Server to interact with Jira and Confluence",
+  "description": "MCP server for Jira and Confluence with search, view, create, and edit capabilities. Converts Markdown to ADF for beautiful native formatting.",
   "type": "module",
+  "bin": {
+    "mcp-jira-confluence": "dist/index.js"
+  },
   "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
-    "dev:http": "tsc && MCP_PORT=3000 node dist/index.js",
+    "dev:http": "tsc && MCP_PORT=9339 node dist/index.js",
     "dev:verbose": "tsc && VERBOSE=true node dist/index.js",
+    "prepack": "npm run build",
+    "pack:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
@@ -32,14 +46,31 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "jira",
     "confluence",
-    "atlassian"
+    "atlassian",
+    "ai",
+    "copilot",
+    "opencode",
+    "claude",
+    "adf",
+    "markdown"
   ],
   "author": "Thamaraiselvam T",
   "repository": {
     "type": "git",
     "url": "https://github.com/thamaraiselvam/mcp-jira-confluence"
+  },
+  "bugs": {
+    "url": "https://github.com/thamaraiselvam/mcp-jira-confluence/issues"
+  },
+  "homepage": "https://github.com/thamaraiselvam/mcp-jira-confluence#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT"
 }

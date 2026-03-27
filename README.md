@@ -1,269 +1,246 @@
-# Jira and Confluence MCP Server (TypeScript, HTTP)
+# Jira & Confluence MCP Server
 
-A production-ready **Model Context Protocol (MCP) server for Jira and Confluence** that lets AI assistants search, read, create, and update Atlassian content over HTTP.
-
-If you're looking for an **Atlassian MCP server**, **Jira MCP integration**, or **Confluence MCP tools** for Claude Desktop, VS Code, Copilot, or Zed, this project is built for that workflow.
-
-## Why this Jira + Confluence MCP Server
-
-- Connect AI agents to **Jira issues** and **Confluence pages** with one server
-- Use **JQL** and **CQL** search directly from MCP tools
-- Create and update content using **Markdown** inputs
-- Run as a simple **local HTTP MCP endpoint** (`/mcp`)
-- Support shared or service-specific Atlassian credentials
+A Model Context Protocol (MCP) server that connects AI assistants to Jira and Confluence.
 
 ## Features
 
-### Confluence tools
-- Search pages (`search_confluence`) with CQL
-- Read page content (`get_confluence_page`)
-- Create pages from Markdown (`create_confluence_page`)
-- Update pages from Markdown (`update_confluence_page`)
-- Add comments (`add_confluence_comment`)
-- Read version history (`get_confluence_page_versions`)
-- Check permissions (`check_confluence_permissions`)
+- 🔍 **Search & View** - Query Jira issues with JQL and Confluence pages with CQL
+- ✏️ **Create & Edit** - Add new issues and pages, update existing content
+- 🎨 **Rich Formatting** - Automatically converts AI-generated Markdown to ADF (Atlassian Document Format) for beautiful, native-looking content in Jira and Confluence
+- 🔒 **Safe Operations** - No delete operations—read-heavy with controlled write access
+- 🚀 **Easy Setup** - One-command integration with OpenCode, GitHub Copilot, Claude Desktop, and more
+- 🔐 **Secure** - Uses Atlassian API tokens with optional TLS configuration for corporate networks
 
-### Jira tools
-- Search issues (`jira_search`) with JQL
-- Read issue details (`jira_get_issue`)
-- Create issues from Markdown (`jira_create_issue`)
-- Update issue fields (`jira_update_issue`)
-- Transition workflow status (`jira_transition_issue`)
-- List available transitions (`jira_get_transitions`)
+## Add to OpenCode CLI
 
-### Platform capabilities
-- HTTP transport for MCP clients (no stdio)
-- Stateless server design
-- Optional TLS bypass for restricted corporate networks
-- Credential fallback strategy for Jira and Confluence
+### Quick Add (Interactive - Recommended)
 
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Environment Variables](#environment-variables)
-- [MCP Client Configuration](#mcp-client-configuration)
-- [Available Tools](#available-tools)
-- [Development](#development)
-- [Troubleshooting](#troubleshooting)
-- [SEO Keywords](#seo-keywords)
-
-## Prerequisites
-
-- Node.js >= 18.x
-- Atlassian account with API token
-- Network access to your Atlassian Cloud or internal Atlassian instance
-
-## Quick Start
-
-1. **Clone the repository:**
+Use OpenCode's interactive MCP add command:
 
 ```bash
-git clone <repository-url>
-cd mcp-jira-confluence
+opencode mcp add
 ```
 
-2. **Install dependencies:**
+Then follow the prompts:
 
-```bash
-npm install
+```
+┌  Add MCP server
+│
+◇  Enter MCP server name
+│  jira-confluence
+│
+◇  Select MCP server type
+│  Local
+│
+◇  Enter command to run
+│  npx mcp-jira-confluence
 ```
 
-3. **Create a local `.env` file:**
+After adding, edit `~/.config/opencode/opencode.json` to add your credentials:
 
-```bash
-cp .env.example .env
-# Edit .env with your Atlassian credentials
+```json
+{
+  "mcp": {
+    "jira-confluence": {
+      "type": "local",
+      "command": ["npx", "mcp-jira-confluence"],
+      "environment": {
+        "ATLASSIAN_URL": "https://your-org.atlassian.net",
+        "ATLASSIAN_EMAIL": "your.email@example.com",
+        "ATLASSIAN_API_TOKEN": "your-api-token",
+        "IGNORE_TLS_ERRORS": "true"
+      }
+    }
+  }
+}
 ```
 
-4. **Build and run:**
+Get your API token from [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
 
-```bash
-npm run build
-npm start
+
+### Manual Configuration
+
+Create or edit `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "jira-confluence": {
+      "type": "local",
+      "command": ["npx", "mcp-jira-confluence"],
+      "environment": {
+        "ATLASSIAN_URL": "https://your-org.atlassian.net",
+        "ATLASSIAN_EMAIL": "your.email@example.com",
+        "ATLASSIAN_API_TOKEN": "your-api-token",
+        "IGNORE_TLS_ERRORS": "true"
+      }
+    }
+  }
+}
 ```
 
-**Custom port:**
+Get your API token from [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
 
-```bash
-MCP_PORT=8080 npm start
+### Usage in OpenCode
+
+After configuration, reference the tools in your prompts:
+
+```
+Search for recent bugs in PROJ project. use jira-confluence
 ```
 
-**Verbose debug mode:**
+Or add to your `AGENTS.md`:
 
-```bash
-VERBOSE=true npm start
+```markdown
+When working with Jira or Confluence, use `jira-confluence` tools.
 ```
 
-**Health check:**
+## Other MCP Clients
 
-```bash
-curl http://127.0.0.1:3000/health
+### GitHub Copilot CLI
+
+Create or edit `~/.config/github-copilot/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jira-confluence": {
+      "command": "npx",
+      "args": ["mcp-jira-confluence"],
+      "env": {
+        "ATLASSIAN_URL": "https://your-org.atlassian.net",
+        "ATLASSIAN_EMAIL": "your.email@example.com",
+        "ATLASSIAN_API_TOKEN": "your-api-token",
+        "IGNORE_TLS_ERRORS": "true"
+      }
+    }
+  }
+}
 ```
 
-## Environment Variables
+### Claude Desktop & VS Code
 
-The server reads `.env` from the current working directory.
+Same configuration format. For Claude Desktop, edit your Claude config file. For VS Code, add to `.vscode/mcp.json`.
 
-```dotenv
-# Common credentials (recommended)
-ATLASSIAN_URL=https://your-org.atlassian.net
-ATLASSIAN_EMAIL=your.email@example.com
-ATLASSIAN_API_TOKEN=your-api-token
+### Connect to Running Server
 
-# Optional: service-specific overrides
-# CONFLUENCE_URL=https://your-confluence.atlassian.net
-# CONFLUENCE_EMAIL=confluence@example.com
-# CONFLUENCE_API_TOKEN=confluence-specific-token
-# JIRA_URL=https://your-jira.atlassian.net
-# JIRA_EMAIL=jira@example.com
-# JIRA_API_TOKEN=jira-specific-token
-
-# Optional scoping
-CONFLUENCE_SPACE_KEY=MYSPACE
-JIRA_PROJECT_KEY=PROJ
-
-# Optional TLS bypass (corporate VPN/proxy)
-IGNORE_TLS_ERRORS=false
-
-# Optional custom port (default: 3000)
-MCP_PORT=3000
-
-# Optional verbose mode
-VERBOSE=false
-```
-
-**Configuration priority:**
-- **Confluence**: `CONFLUENCE_*` → `ATLASSIAN_*`
-- **Jira**: `JIRA_*` → `ATLASSIAN_*` → `CONFLUENCE_*` (legacy)
-
-Get your token from [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
-
-## MCP Client Configuration
-
-**Connect URL:** `http://127.0.0.1:3000/mcp`
-
-### Claude Desktop
+If you prefer to run the server manually, use this configuration:
 
 ```json
 {
   "mcpServers": {
     "jira-confluence": {
       "type": "http",
-      "url": "http://127.0.0.1:3000/mcp"
+      "url": "http://127.0.0.1:9339/mcp"
     }
   }
 }
 ```
 
-### VS Code / GitHub Copilot
+## Quick Start (Manual Usage)
 
-Add to `.vscode/mcp.json`:
+If you prefer to run the server manually instead of auto-starting:
 
-```json
-{
-  "servers": {
-    "jira-confluence": {
-      "type": "http",
-      "url": "http://127.0.0.1:3000/mcp"
-    }
-  }
-}
+1. **Create `.env` file in your home directory or project root:**
+
+```bash
+# ~/.env or current directory
+ATLASSIAN_URL=https://your-org.atlassian.net
+ATLASSIAN_EMAIL=your.email@example.com
+ATLASSIAN_API_TOKEN=your-api-token
+IGNORE_TLS_ERRORS=true
 ```
 
-### Zed
+Get your API token from [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
 
-Add to `~/.config/zed/settings.json`:
+2. **Run with npx:**
 
-```json
-{
-  "context_servers": {
-    "jira-confluence": {
-      "type": "http",
-      "url": "http://127.0.0.1:3000/mcp"
-    }
-  }
-}
+```bash
+npx mcp-jira-confluence
 ```
+
+Server runs on `http://127.0.0.1:9339` by default.
 
 ## Available Tools
 
-### Confluence (7 tools)
-- `search_confluence`
-- `get_confluence_page`
-- `create_confluence_page`
-- `update_confluence_page`
-- `add_confluence_comment`
-- `get_confluence_page_versions`
-- `check_confluence_permissions`
+### Confluence
+- `search_confluence` - Search pages with CQL
+- `get_confluence_page` - Read page content
+- `create_confluence_page` - Create pages from Markdown
+- `update_confluence_page` - Update pages from Markdown
+- `add_confluence_comment` - Add comments
+- `get_confluence_page_versions` - Read version history
+- `check_confluence_permissions` - Check permissions
 
-### Jira (6 tools)
-- `jira_search`
-- `jira_get_issue`
-- `jira_create_issue`
-- `jira_update_issue`
-- `jira_transition_issue`
-- `jira_get_transitions`
+### Jira
+- `jira_search` - Search issues with JQL
+- `jira_get_issue` - Read issue details
+- `jira_create_issue` - Create issues from Markdown
+- `jira_update_issue` - Update issue fields
+- `jira_transition_issue` - Change workflow status
+- `jira_get_transitions` - List available transitions
 
-For tool schemas, call `POST /mcp` with method `tools/list`.
+## Configuration
 
-## Development
+### Optional Variables
 
 ```bash
-# Run in dev mode (build + watch)
-npm run dev
+# Custom port (default: 9339)
+MCP_PORT=8080
 
-# Run tests
-npm test
+# Service-specific credentials (overrides ATLASSIAN_*)
+CONFLUENCE_URL=https://your-confluence.atlassian.net
+CONFLUENCE_API_TOKEN=confluence-token
 
-# Generate coverage
-npm run test:coverage
+JIRA_URL=https://your-jira.atlassian.net
+JIRA_API_TOKEN=jira-token
 
-# Validate permissions
-npm run validate
+# Project/Space scoping
+CONFLUENCE_SPACE_KEY=MYSPACE
+JIRA_PROJECT_KEY=PROJ
+
+# Corporate network
+IGNORE_TLS_ERRORS=true
+
+# Debug logging
+VERBOSE=true
 ```
 
-### Project Structure
-
-```text
-src/
-├── index.ts          # HTTP server entry point
-├── config.ts         # Environment variable loading
-├── client.ts         # Axios client factory (TLS, auth)
-├── markdown.ts       # Markdown → HTML conversion
-├── jira-markdown.ts  # Markdown → ADF conversion
-├── confluence.ts     # Confluence API operations
-├── jira.ts           # Jira API operations
-└── tools.ts          # MCP tool handlers
-
-tests/
-├── unit/             # Unit tests (mocked APIs)
-└── integration/      # Integration tests (InMemoryTransport)
-```
+**Note:** When using the `command` configuration approach, set variables in the `env` object. When running manually with `npx`, use a `.env` file.
 
 ## Troubleshooting
 
-### Validate access and configuration
+### Manual Testing
+
+Run the server manually to test your configuration:
 
 ```bash
+npx mcp-jira-confluence
+```
+
+Check server health:
+```bash
+curl http://127.0.0.1:9339/health
+```
+
+### Common Issues
+
+- **Connection refused**: Check VPN/proxy and URLs in your configuration
+- **TLS errors**: Add `"IGNORE_TLS_ERRORS": "true"` to the `env` object
+- **Authentication errors**: Verify your API token at [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+
+### Development
+
+Clone and validate:
+```bash
+git clone https://github.com/thamaraiselvam/mcp-jira-confluence
+cd mcp-jira-confluence
+npm install
+npm run build
 npm run validate
 ```
 
-### Common connection issues
+## License
 
-| Issue | Fix |
-|---|---|
-| `ECONNREFUSED` | Check VPN/proxy and verify URLs in `.env` |
-| TLS certificate errors | Set `IGNORE_TLS_ERRORS=true` |
-
-## SEO Keywords
-
-This repository targets queries such as:
-
-- Jira MCP server
-- Confluence MCP server
-- Atlassian MCP integration
-- Model Context Protocol Jira
-- Model Context Protocol Confluence
-- Claude Desktop Jira integration
-- VS Code MCP Jira Confluence
+MIT
