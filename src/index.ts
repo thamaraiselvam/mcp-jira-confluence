@@ -99,7 +99,7 @@ function createMcpServer(): Server {
   const server = new Server(
     {
       name: "mcp-jira-confluence",
-      version: "1.0.0",
+      version: "1.0.2",
     },
     {
       capabilities: {
@@ -160,7 +160,7 @@ const httpServer = http.createServer(async (req, res) => {
     sendJson(res, 200, {
       status: "ok",
       server: "mcp-jira-confluence",
-      version: "1.0.0",
+      version: "1.0.2",
       mcp: `http://${HOST}:${PORT}/mcp`,
       verbose: VERBOSE,
     });

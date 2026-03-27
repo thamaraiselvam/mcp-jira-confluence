@@ -1,6 +1,6 @@
 {
   "name": "mcp-jira-confluence",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for Jira and Confluence with search, view, create, and edit capabilities. Converts Markdown to ADF for beautiful native formatting.",
   "type": "module",
   "bin": {
