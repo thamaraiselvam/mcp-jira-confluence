@@ -91,17 +91,36 @@ Get your API token from [Atlassian API Tokens](https://id.atlassian.com/manage-p
 
 ### Usage in OpenCode
 
-After configuration, reference the tools in your prompts:
+After configuration, use natural prompts to interact with Jira and Confluence:
 
+**Search and Query:**
 ```
-Search for recent bugs in PROJ project. use jira-confluence
+Show me all high-priority bugs in the AUTH project
+What are the open issues assigned to me in Jira?
+Search Confluence for API documentation in the DEV space
 ```
 
-Or add to your `AGENTS.md`:
-
-```markdown
-When working with Jira or Confluence, use `jira-confluence` tools.
+**View and Analyze:**
 ```
+Get details of issue PROJ-123
+Show me the latest comments on PROJ-456
+What's in the "Architecture Decisions" Confluence page?
+```
+
+**Create and Update:**
+```
+Create a new bug in Jira: The login page shows a 500 error when...
+Update PROJ-789 to mark it as in progress
+Add a comment to PROJ-101: "Fixed in latest deployment"
+```
+
+**Workflow:**
+```
+What transitions are available for PROJ-234?
+Move PROJ-567 to Done status
+```
+
+The AI will automatically use the Jira and Confluence tools when it detects you're asking about issues, projects, or documentation.
 
 ## Other MCP Clients
 
