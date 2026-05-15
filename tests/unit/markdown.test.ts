@@ -165,20 +165,23 @@ describe("markdown — convertMarkdownToHtml()", () => {
   // Code blocks
   // -------------------------------------------------------
   describe("code blocks", () => {
-    it("converts a fenced code block", () => {
+    it("converts a fenced code block to a Confluence code macro", () => {
       const md = "```\nconst x = 1;\n```";
       const result = convertMarkdownToHtml(md);
-      expect(result).toContain("<pre>");
-      expect(result).toContain("<code>");
+      expect(result).toContain('<ac:structured-macro ac:name="code">');
+      expect(result).toContain("<ac:plain-text-body><![CDATA[");
       expect(result).toContain("const x = 1;");
+      expect(result).not.toContain("<pre>");
     });
 
-    it("converts a fenced code block with a language identifier", () => {
+    it("converts a fenced code block with a language identifier to a Confluence code macro with language param", () => {
       const md = '```typescript\nconst x: number = 1;\n```';
       const result = convertMarkdownToHtml(md);
-      expect(result).toContain("<pre>");
-      expect(result).toContain("<code");
+      expect(result).toContain('<ac:structured-macro ac:name="code">');
+      expect(result).toContain('<ac:parameter ac:name="language">typescript</ac:parameter>');
+      expect(result).toContain("<ac:plain-text-body><![CDATA[");
       expect(result).toContain("const x: number = 1;");
+      expect(result).not.toContain("<pre>");
     });
   });
 
@@ -329,8 +332,8 @@ describe("markdown — convertMarkdownToHtml()", () => {
       expect(result).toContain("<li>Feature B</li>");
       expect(result).toContain("<li>Feature C</li>");
       expect(result).toContain("<h2>Code Example</h2>");
-      expect(result).toContain("<pre>");
-      expect(result).toContain('console.log(&quot;hello&quot;);');
+      expect(result).toContain('<ac:structured-macro ac:name="code">');
+      expect(result).toContain('console.log("hello");');
       expect(result).toContain("<blockquote>");
       expect(result).toContain("Important note here");
       expect(result).toContain("<hr>");
