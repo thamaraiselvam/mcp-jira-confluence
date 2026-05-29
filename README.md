@@ -209,6 +209,57 @@ Server runs on `http://127.0.0.1:9339` by default.
 - `jira_add_comment` - Add a Markdown comment to an issue
 - `jira_update_comment` - Update an existing comment on an issue
 
+## CLI Usage
+
+The same package also ships a command-line interface, so you can drive Jira and Confluence straight from a terminal, a shell script, or a Claude skill — without an MCP client. Every MCP tool above has a matching CLI command, grouped under `jira` and `confluence`.
+
+The package installs two binaries:
+
+| Binary | Purpose |
+| --- | --- |
+| `mcp-jira-confluence` | The MCP server (stdio/HTTP) — used by AI clients. |
+| `jira-confluence` | The one-shot CLI described here. |
+
+It reads the **same** environment variables as the server (`ATLASSIAN_*`, or service-specific `JIRA_*` / `CONFLUENCE_*`). Set them in your shell or a `.env` file.
+
+```bash
+# List all command groups and commands
+jira-confluence --help
+
+# Per-command help (shows required/optional arguments)
+jira-confluence jira create-issue --help
+
+# --- Jira ---
+jira-confluence jira search --jql "status = 'In Progress'" --limit 10
+jira-confluence jira get-issue PROJ-123
+jira-confluence jira create-issue \
+  --projectKey PROJ --issueType Story \
+  --summary "New story" --description "# Goal\n\nShip it" \
+  --priority High --labels "backend,urgent"
+jira-confluence jira update-issue PROJ-123 '{"summary":"Updated title"}'
+jira-confluence jira transition-issue PROJ-123 "In Progress"
+jira-confluence jira get-transitions PROJ-123
+jira-confluence jira add-comment PROJ-123 "Looks **good** to me"
+jira-confluence jira update-comment PROJ-123 100042 "Edited comment"
+
+# --- Confluence ---
+jira-confluence confluence search --cql "type=page AND title~'Roadmap'"
+jira-confluence confluence get-page 12345
+jira-confluence confluence create-page \
+  --spaceKey ENG --title "Design Notes" --markdownContent "# Notes"
+jira-confluence confluence update-page 12345 "New Title" "# Updated body"
+jira-confluence confluence add-comment 12345 "Thanks for writing this up!"
+jira-confluence confluence get-page-versions 12345 --limit 5
+jira-confluence confluence check-permissions
+```
+
+**Notes:**
+- Arguments can be passed as named flags (`--summary "..."`) or as positionals in the order shown by `--help`.
+- Markdown is converted exactly as the MCP server does — to HTML for Confluence and to ADF for Jira.
+- Add `--json` to any command to print the raw result as JSON for scripting; the default is a human-readable summary.
+- Commands exit `0` on success and non-zero on any failure (missing argument, missing config, or API error).
+- Like the MCP server, the CLI has **no delete operations**.
+
 ## Configuration
 
 ### Optional Variables

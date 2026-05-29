@@ -4,7 +4,8 @@
   "description": "MCP server for Jira and Confluence with search, view, create, and edit capabilities. Converts Markdown to ADF for beautiful native formatting.",
   "type": "module",
   "bin": {
-    "mcp-jira-confluence": "dist/index.js"
+    "mcp-jira-confluence": "dist/index.js",
+    "jira-confluence": "dist/cli.js"
   },
   "main": "dist/index.js",
   "exports": {
@@ -22,6 +23,8 @@
     "dev": "tsc && node dist/index.js",
     "dev:http": "tsc && MCP_PORT=9339 node dist/index.js",
     "dev:verbose": "tsc && VERBOSE=true node dist/index.js",
+    "cli": "node dist/cli.js",
+    "dev:cli": "tsc && node dist/cli.js",
     "prepack": "npm run build",
     "pack:check": "npm pack --dry-run",
     "test": "vitest run",

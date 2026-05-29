@@ -41,6 +41,15 @@ The server auto-selects transport at startup based on `process.stdin.isTTY`:
 
 HTTP mode is **stateless**: a fresh `Server` + `StreamableHTTPServerTransport` is built per request via `createMcpServer()` and torn down on response finish. The axios clients and config, however, are created **once** at startup in the `bootstrap` IIFE.
 
+### CLI entry point (`cli.ts`)
+The package exposes a **second** `bin` (`jira-confluence` → `dist/cli.js`) that runs one-shot terminal commands and exits — it never starts an MCP transport, and `index.ts` is untouched by it. `cli.ts` is a thin argv→function adapter over the same `confluence.ts` / `jira.ts` layer:
+- `parseArgs(argv)` — pure parser → `{ group, command, positionals, options, json, help }`.
+- `commands` — a declarative table (one entry per MCP tool, grouped `confluence`/`jira`) describing args + a handler that calls the matching API function. **To add a CLI command, add a table entry** (mirrors the `tools.ts` ListTools/switch pattern). Args can be passed as `--flag value` or as positionals in declared order.
+- `run(argv, deps)` — validates required args, lazily builds only the needed client (Confluence commands don't require Jira creds and vice versa), dispatches, formats, and returns an exit code. `deps` (config loaders, client builders, stdout/stderr) are injectable for testing.
+- `formatResult(result, json)` — `--json` prints `JSON.stringify`; otherwise a labeled text summary.
+
+A parity test (`tests/unit/cli.test.ts`) asserts every MCP tool has a matching CLI command, so the two surfaces can't silently drift. Markdown conversion is **not** duplicated — the CLI passes raw markdown to the API functions, which convert internally (HTML/ADF), same as the MCP tools.
+
 ### Configuration (`config.ts`)
 Two configs (`loadConfig` for Confluence, `loadJiraConfig` for Jira), each resolved from env with a fallback chain:
 - Confluence: `CONFLUENCE_*` → `ATLASSIAN_*`
