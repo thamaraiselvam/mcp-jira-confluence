@@ -29,6 +29,8 @@ vi.mock("../../src/jira.js", () => ({
   updateJiraIssue: vi.fn(),
   transitionJiraIssue: vi.fn(),
   getJiraIssueTransitions: vi.fn(),
+  addJiraComment: vi.fn(),
+  updateJiraComment: vi.fn(),
 }));
 
 const mockedSearch = vi.mocked(confluenceModule.searchConfluence);
@@ -44,6 +46,8 @@ const mockedJiraCreateIssue = vi.mocked(jiraModule.createJiraIssue);
 const mockedJiraUpdateIssue = vi.mocked(jiraModule.updateJiraIssue);
 const mockedJiraTransitionIssue = vi.mocked(jiraModule.transitionJiraIssue);
 const mockedJiraGetTransitions = vi.mocked(jiraModule.getJiraIssueTransitions);
+const mockedJiraAddComment = vi.mocked(jiraModule.addJiraComment);
+const mockedJiraUpdateComment = vi.mocked(jiraModule.updateJiraComment);
 
 // ---------------------------------------------------------------------------
 // Helper: build a mock AxiosInstance
@@ -1838,6 +1842,177 @@ describe("tools — registerTools()", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Error fetching Jira transitions");
+    });
+  });
+
+  // ===========================================================================
+  // jira_add_comment
+  // ===========================================================================
+  describe("jira_add_comment", () => {
+    it("calls addJiraComment and returns success response", async () => {
+      mockedJiraAddComment.mockResolvedValue({
+        id: "20001",
+        issueKey: "TEST-1",
+        url: "https://x.com/browse/TEST-1",
+      });
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_add_comment",
+          arguments: { issueIdOrKey: "TEST-1", markdownBody: "**Hello**" },
+        },
+      });
+
+      expect(mockedJiraAddComment).toHaveBeenCalledWith(
+        jiraClient,
+        "TEST-1",
+        "**Hello**",
+        undefined
+      );
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text as string;
+      expect(text).toContain("20001");
+      expect(text).toContain("added successfully");
+    });
+
+    it("returns an error when markdownBody is missing", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_add_comment",
+          arguments: { issueIdOrKey: "TEST-1" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Comment body is required");
+      expect(mockedJiraAddComment).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when markdownBody is only whitespace", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_add_comment",
+          arguments: { issueIdOrKey: "TEST-1", markdownBody: "   " },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Comment body is required");
+      expect(mockedJiraAddComment).not.toHaveBeenCalled();
+    });
+
+    it("returns error response when addJiraComment throws", async () => {
+      mockedJiraAddComment.mockRejectedValue(new Error("Add comment failed"));
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_add_comment",
+          arguments: { issueIdOrKey: "TEST-1", markdownBody: "body" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain(
+        "Error adding comment to Jira issue"
+      );
+    });
+
+    it("handles non-Error thrown values gracefully", async () => {
+      mockedJiraAddComment.mockRejectedValue({ weird: "object" });
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_add_comment",
+          arguments: { issueIdOrKey: "TEST-1", markdownBody: "body" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain(
+        "Error adding comment to Jira issue"
+      );
+    });
+  });
+
+  // ===========================================================================
+  // jira_update_comment
+  // ===========================================================================
+  describe("jira_update_comment", () => {
+    it("calls updateJiraComment and returns success response", async () => {
+      mockedJiraUpdateComment.mockResolvedValue({
+        id: "20001",
+        issueKey: "TEST-1",
+        url: "https://x.com/browse/TEST-1",
+      });
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_comment",
+          arguments: {
+            issueIdOrKey: "TEST-1",
+            commentId: "20001",
+            markdownBody: "updated",
+          },
+        },
+      });
+
+      expect(mockedJiraUpdateComment).toHaveBeenCalledWith(
+        jiraClient,
+        "TEST-1",
+        "20001",
+        "updated",
+        undefined
+      );
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text as string;
+      expect(text).toContain("20001");
+      expect(text).toContain("updated successfully");
+    });
+
+    it("returns an error when commentId is missing", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_comment",
+          arguments: { issueIdOrKey: "TEST-1", markdownBody: "body" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Comment ID is required");
+      expect(mockedJiraUpdateComment).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when markdownBody is missing", async () => {
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_comment",
+          arguments: { issueIdOrKey: "TEST-1", commentId: "20001" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Comment body is required");
+      expect(mockedJiraUpdateComment).not.toHaveBeenCalled();
+    });
+
+    it("returns error response when updateJiraComment throws", async () => {
+      mockedJiraUpdateComment.mockRejectedValue(
+        new Error("Update comment failed")
+      );
+
+      const result = await handlers.callTool!({
+        params: {
+          name: "jira_update_comment",
+          arguments: {
+            issueIdOrKey: "TEST-1",
+            commentId: "20001",
+            markdownBody: "body",
+          },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Error updating Jira comment");
     });
   });
 });
