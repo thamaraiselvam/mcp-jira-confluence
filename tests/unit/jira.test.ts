@@ -1542,3 +1542,285 @@ describe("jira — getJiraIssueTransitions()", () => {
     });
   });
 });
+
+// ===========================================================================
+// addJiraComment
+// ===========================================================================
+describe("jira — addJiraComment()", () => {
+  let client: AxiosInstance;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  // ── input validation ──────────────────────────────────────────────────────
+
+  describe("input validation", () => {
+    it("throws when issueIdOrKey is empty", async () => {
+      await expect(
+        addJiraComment(client, "", "Hello")
+      ).rejects.toThrow("Issue ID or key must not be empty");
+    });
+
+    it("throws when issueIdOrKey is only whitespace", async () => {
+      await expect(
+        addJiraComment(client, "   ", "Hello")
+      ).rejects.toThrow("Issue ID or key must not be empty");
+    });
+
+    it("throws when markdownBody is empty", async () => {
+      await expect(
+        addJiraComment(client, "PROJ-1", "")
+      ).rejects.toThrow("Comment body must not be empty");
+    });
+
+    it("throws when markdownBody is only whitespace", async () => {
+      await expect(
+        addJiraComment(client, "PROJ-1", "   ")
+      ).rejects.toThrow("Comment body must not be empty");
+    });
+  });
+
+  // ── API request ───────────────────────────────────────────────────────────
+
+  describe("API request", () => {
+    it("POSTs an ADF body to the comment endpoint", async () => {
+      vi.mocked(client.post).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      await addJiraComment(client, "PROJ-1", "**bold** comment");
+
+      expect(client.post).toHaveBeenCalledWith(
+        "/rest/api/3/issue/PROJ-1/comment",
+        expect.objectContaining({
+          body: expect.objectContaining({ type: "doc", version: 1 }),
+        })
+      );
+    });
+
+    it("URL-encodes the issue key", async () => {
+      vi.mocked(client.post).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      await addJiraComment(client, "MY PROJECT-1", "comment");
+
+      expect(client.post).toHaveBeenCalledWith(
+        "/rest/api/3/issue/MY%20PROJECT-1/comment",
+        expect.any(Object)
+      );
+    });
+  });
+
+  // ── project-scoping guard ─────────────────────────────────────────────────
+
+  describe("project-scoping guard", () => {
+    it("throws when the issue belongs to another project", async () => {
+      vi.mocked(client.get).mockResolvedValueOnce(
+        axiosResponse({ fields: { project: { key: "OTHER" } } })
+      );
+
+      await expect(
+        addJiraComment(client, "OTHER-1", "comment", "PROJ")
+      ).rejects.toThrow(/scoped to project "PROJ"/);
+      expect(client.post).not.toHaveBeenCalled();
+    });
+
+    it("allows the comment when the issue is in scope (case-insensitive)", async () => {
+      vi.mocked(client.get).mockResolvedValueOnce(
+        axiosResponse({ fields: { project: { key: "proj" } } })
+      );
+      vi.mocked(client.post).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      await expect(
+        addJiraComment(client, "PROJ-1", "comment", "PROJ")
+      ).resolves.toBeDefined();
+      expect(client.post).toHaveBeenCalled();
+    });
+
+    it("skips the scope check when no configuredProjectKey is set", async () => {
+      vi.mocked(client.post).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      await addJiraComment(client, "PROJ-1", "comment");
+
+      expect(client.get).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── response mapping ──────────────────────────────────────────────────────
+
+  describe("response mapping", () => {
+    it("returns the comment id, issue key, and browse URL", async () => {
+      vi.mocked(client.post).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      const result = await addJiraComment(client, "PROJ-1", "comment");
+
+      expect(result).toEqual({
+        id: "20001",
+        issueKey: "PROJ-1",
+        url: "https://my-org.atlassian.net/browse/PROJ-1",
+      });
+    });
+
+    it("defaults id to an empty string when missing", async () => {
+      vi.mocked(client.post).mockResolvedValueOnce(axiosResponse({}));
+
+      const result = await addJiraComment(client, "PROJ-1", "comment");
+
+      expect(result.id).toBe("");
+    });
+  });
+
+  // ── error propagation ─────────────────────────────────────────────────────
+
+  describe("error propagation", () => {
+    it("propagates API errors", async () => {
+      vi.mocked(client.post).mockRejectedValueOnce(new Error("Network error"));
+
+      await expect(
+        addJiraComment(client, "PROJ-1", "comment")
+      ).rejects.toThrow("Network error");
+    });
+  });
+});
+
+// ===========================================================================
+// updateJiraComment
+// ===========================================================================
+describe("jira — updateJiraComment()", () => {
+  let client: AxiosInstance;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  // ── input validation ──────────────────────────────────────────────────────
+
+  describe("input validation", () => {
+    it("throws when issueIdOrKey is empty", async () => {
+      await expect(
+        updateJiraComment(client, "", "20001", "Hello")
+      ).rejects.toThrow("Issue ID or key must not be empty");
+    });
+
+    it("throws when commentId is empty", async () => {
+      await expect(
+        updateJiraComment(client, "PROJ-1", "", "Hello")
+      ).rejects.toThrow("Comment ID must not be empty");
+    });
+
+    it("throws when commentId is only whitespace", async () => {
+      await expect(
+        updateJiraComment(client, "PROJ-1", "   ", "Hello")
+      ).rejects.toThrow("Comment ID must not be empty");
+    });
+
+    it("throws when markdownBody is empty", async () => {
+      await expect(
+        updateJiraComment(client, "PROJ-1", "20001", "")
+      ).rejects.toThrow("Comment body must not be empty");
+    });
+  });
+
+  // ── API request ───────────────────────────────────────────────────────────
+
+  describe("API request", () => {
+    it("PUTs an ADF body to the comment endpoint", async () => {
+      vi.mocked(client.put).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      await updateJiraComment(client, "PROJ-1", "20001", "updated body");
+
+      expect(client.put).toHaveBeenCalledWith(
+        "/rest/api/3/issue/PROJ-1/comment/20001",
+        expect.objectContaining({
+          body: expect.objectContaining({ type: "doc", version: 1 }),
+        })
+      );
+    });
+
+    it("URL-encodes the issue key and comment id", async () => {
+      vi.mocked(client.put).mockResolvedValueOnce(
+        axiosResponse({ id: "2 0001" })
+      );
+
+      await updateJiraComment(client, "MY PROJECT-1", "2 0001", "body");
+
+      expect(client.put).toHaveBeenCalledWith(
+        "/rest/api/3/issue/MY%20PROJECT-1/comment/2%200001",
+        expect.any(Object)
+      );
+    });
+  });
+
+  // ── project-scoping guard ─────────────────────────────────────────────────
+
+  describe("project-scoping guard", () => {
+    it("throws when the issue belongs to another project", async () => {
+      vi.mocked(client.get).mockResolvedValueOnce(
+        axiosResponse({ fields: { project: { key: "OTHER" } } })
+      );
+
+      await expect(
+        updateJiraComment(client, "OTHER-1", "20001", "body", "PROJ")
+      ).rejects.toThrow(/scoped to project "PROJ"/);
+      expect(client.put).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── response mapping ──────────────────────────────────────────────────────
+
+  describe("response mapping", () => {
+    it("returns the comment id, issue key, and browse URL", async () => {
+      vi.mocked(client.put).mockResolvedValueOnce(
+        axiosResponse({ id: "20001" })
+      );
+
+      const result = await updateJiraComment(
+        client,
+        "PROJ-1",
+        "20001",
+        "body"
+      );
+
+      expect(result).toEqual({
+        id: "20001",
+        issueKey: "PROJ-1",
+        url: "https://my-org.atlassian.net/browse/PROJ-1",
+      });
+    });
+
+    it("falls back to the provided commentId when id is missing", async () => {
+      vi.mocked(client.put).mockResolvedValueOnce(axiosResponse({}));
+
+      const result = await updateJiraComment(
+        client,
+        "PROJ-1",
+        "20001",
+        "body"
+      );
+
+      expect(result.id).toBe("20001");
+    });
+  });
+
+  // ── error propagation ─────────────────────────────────────────────────────
+
+  describe("error propagation", () => {
+    it("propagates API errors", async () => {
+      vi.mocked(client.put).mockRejectedValueOnce(new Error("Network error"));
+
+      await expect(
+        updateJiraComment(client, "PROJ-1", "20001", "body")
+      ).rejects.toThrow("Network error");
+    });
+  });
+});
