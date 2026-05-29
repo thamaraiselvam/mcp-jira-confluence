@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AxiosInstance } from "axios";
 import {
@@ -683,9 +684,26 @@ async function main(): Promise<void> {
   process.exit(code);
 }
 
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  process.argv[1] === fileURLToPath(import.meta.url);
+// npm/Homebrew expose this CLI through a bin symlink, so process.argv[1] is
+// the symlink path while import.meta.url is the resolved realpath of the
+// target file. Resolve argv[1] through realpath before comparing, otherwise
+// the two never match when invoked via the installed binary and main() never
+// runs (the process exits 0 with no output).
+export function isInvokedAsScript(
+  argvPath: string | undefined,
+  moduleUrl: string,
+): boolean {
+  if (argvPath === undefined) return false;
+  let resolved: string;
+  try {
+    resolved = realpathSync(argvPath);
+  } catch {
+    resolved = argvPath;
+  }
+  return resolved === fileURLToPath(moduleUrl);
+}
+
+const invokedDirectly = isInvokedAsScript(process.argv[1], import.meta.url);
 
 if (invokedDirectly) {
   void main();

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as confluenceModule from "../../src/confluence.js";
 import * as jiraModule from "../../src/jira.js";
 import type { ConfluenceConfig, JiraConfig } from "../../src/config.js";
@@ -11,8 +11,19 @@ import {
   run,
   topLevelHelp,
   commandHelp,
+  isInvokedAsScript,
   type CliDeps,
 } from "../../src/cli.js";
+import {
+  mkdtempSync,
+  writeFileSync,
+  symlinkSync,
+  rmSync,
+  realpathSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // ---------------------------------------------------------------------------
 // Mock the API layer so dispatch can be observed without touching the network.
@@ -570,5 +581,52 @@ describe("error handling", () => {
     );
     expect(code).toBe(1);
     expect(stderr.join("\n")).toContain("Expected a number");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bootstrap guard — must recognise invocation through a bin symlink, which is
+// how npm/Homebrew expose the installed `jira-confluence` binary. Regression
+// test for the guard exiting 0 with no output when run via the symlink.
+// ---------------------------------------------------------------------------
+describe("isInvokedAsScript", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    // realpath: on macOS tmpdir() is a symlink, and import.meta.url is always
+    // realpath-resolved by Node, so the module side of the comparison must be
+    // resolved too — matching real runtime behaviour.
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "jc-cli-")));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("matches when argv path is the file itself", () => {
+    const file = join(dir, "cli.js");
+    writeFileSync(file, "");
+    expect(isInvokedAsScript(file, pathToFileURL(file).href)).toBe(true);
+  });
+
+  it("matches when argv path is a symlink to the file (bin install)", () => {
+    const file = join(dir, "cli.js");
+    const link = join(dir, "jira-confluence");
+    writeFileSync(file, "");
+    symlinkSync(file, link);
+    // argv[1] is the symlink path, import.meta.url resolves to the realpath.
+    expect(isInvokedAsScript(link, pathToFileURL(file).href)).toBe(true);
+  });
+
+  it("does not match an unrelated module (e.g. imported as a library)", () => {
+    const file = join(dir, "cli.js");
+    const other = join(dir, "other.js");
+    writeFileSync(file, "");
+    writeFileSync(other, "");
+    expect(isInvokedAsScript(other, pathToFileURL(file).href)).toBe(false);
+  });
+
+  it("returns false when argv path is undefined", () => {
+    expect(isInvokedAsScript(undefined, pathToFileURL(dir).href)).toBe(false);
   });
 });
