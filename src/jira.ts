@@ -41,6 +41,18 @@ export interface UpdateJiraIssueResponse {
   url: string;
 }
 
+export interface AddJiraCommentResponse {
+  id: string;
+  issueKey: string;
+  url: string;
+}
+
+export interface UpdateJiraCommentResponse {
+  id: string;
+  issueKey: string;
+  url: string;
+}
+
 export interface JiraTransition {
   id: string;
   name: string;
@@ -542,6 +554,133 @@ export async function getJiraIssueTransitions(
     id: String(t.id ?? ""),
     name: typeof t.name === "string" ? t.name : "",
   }));
+}
+
+/**
+ * Project-scoping guard for comment operations.
+ *
+ * When the server is scoped to a project, fetch the target issue and verify it
+ * belongs to that project before any write — mirroring the fetch-first guard
+ * used by addConfluenceComment. Rejects out-of-scope issues with a clear error.
+ */
+async function assertIssueInProjectScope(
+  client: AxiosInstance,
+  issueIdOrKey: string,
+  configuredProjectKey?: string
+): Promise<void> {
+  if (!configuredProjectKey || configuredProjectKey.trim().length === 0) {
+    return;
+  }
+
+  const response = await client.get(
+    `/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}`,
+    { params: { fields: "project" } }
+  );
+
+  const fields = ((response.data as Record<string, unknown>)?.fields ??
+    {}) as Record<string, unknown>;
+  const projectObj = fields.project as Record<string, unknown> | null;
+  const issueProjectKey =
+    typeof projectObj?.key === "string" ? projectObj.key : undefined;
+
+  if (
+    issueProjectKey?.toUpperCase() !==
+    configuredProjectKey.trim().toUpperCase()
+  ) {
+    throw new Error(
+      `Issue ${issueIdOrKey} belongs to project "${issueProjectKey ?? "unknown"}" but this server is scoped to project "${configuredProjectKey}". Comment rejected.`
+    );
+  }
+}
+
+/**
+ * Add a new comment to a Jira issue (story).
+ *
+ * The comment body is supplied as Markdown and converted to Atlassian Document
+ * Format (ADF) — the same conversion used for issue descriptions.
+ *
+ * @param client               Axios instance configured for Jira.
+ * @param issueIdOrKey         Issue key (e.g. "PROJ-123") or numeric ID.
+ * @param markdownBody         Markdown-formatted comment body.
+ * @param configuredProjectKey Optional server-level project scope guard.
+ */
+export async function addJiraComment(
+  client: AxiosInstance,
+  issueIdOrKey: string,
+  markdownBody: string,
+  configuredProjectKey?: string
+): Promise<AddJiraCommentResponse> {
+  if (!issueIdOrKey || issueIdOrKey.trim().length === 0) {
+    throw new Error("Issue ID or key must not be empty");
+  }
+
+  if (!markdownBody || markdownBody.trim().length === 0) {
+    throw new Error("Comment body must not be empty");
+  }
+
+  await assertIssueInProjectScope(client, issueIdOrKey, configuredProjectKey);
+
+  const response = await client.post(
+    `/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}/comment`,
+    { body: buildAdfDocument(markdownBody) }
+  );
+
+  const data = response.data as Record<string, unknown>;
+  const baseUrl = client.defaults.baseURL ?? "";
+
+  return {
+    id: String(data.id ?? ""),
+    issueKey: issueIdOrKey,
+    url: `${baseUrl}/browse/${issueIdOrKey}`,
+  };
+}
+
+/**
+ * Update the body of an existing comment on a Jira issue (story).
+ *
+ * The new body is supplied as Markdown and converted to ADF. The comment is
+ * identified by the issue key/ID plus the comment ID.
+ *
+ * @param client               Axios instance configured for Jira.
+ * @param issueIdOrKey         Issue key (e.g. "PROJ-123") or numeric ID.
+ * @param commentId            The ID of the comment to update.
+ * @param markdownBody         New Markdown-formatted comment body.
+ * @param configuredProjectKey Optional server-level project scope guard.
+ */
+export async function updateJiraComment(
+  client: AxiosInstance,
+  issueIdOrKey: string,
+  commentId: string,
+  markdownBody: string,
+  configuredProjectKey?: string
+): Promise<UpdateJiraCommentResponse> {
+  if (!issueIdOrKey || issueIdOrKey.trim().length === 0) {
+    throw new Error("Issue ID or key must not be empty");
+  }
+
+  if (!commentId || commentId.trim().length === 0) {
+    throw new Error("Comment ID must not be empty");
+  }
+
+  if (!markdownBody || markdownBody.trim().length === 0) {
+    throw new Error("Comment body must not be empty");
+  }
+
+  await assertIssueInProjectScope(client, issueIdOrKey, configuredProjectKey);
+
+  const response = await client.put(
+    `/rest/api/3/issue/${encodeURIComponent(issueIdOrKey)}/comment/${encodeURIComponent(commentId)}`,
+    { body: buildAdfDocument(markdownBody) }
+  );
+
+  const data = response.data as Record<string, unknown>;
+  const baseUrl = client.defaults.baseURL ?? "";
+
+  return {
+    id: String(data.id ?? commentId),
+    issueKey: issueIdOrKey,
+    url: `${baseUrl}/browse/${issueIdOrKey}`,
+  };
 }
 
 // Re-export AxiosError so callers can distinguish HTTP errors if needed

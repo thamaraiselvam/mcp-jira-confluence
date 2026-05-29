@@ -5,7 +5,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { AxiosInstance } from "axios";
 import { searchConfluence, updateConfluencePage, getConfluencePage, createConfluencePage, addConfluenceComment, getConfluencePageVersions, checkPermissions } from "./confluence.js";
-import { searchJira, getJiraIssue, createJiraIssue, updateJiraIssue, transitionJiraIssue, getJiraIssueTransitions } from "./jira.js";
+import { searchJira, getJiraIssue, createJiraIssue, updateJiraIssue, transitionJiraIssue, getJiraIssueTransitions, addJiraComment, updateJiraComment } from "./jira.js";
 import { ConfluenceConfig, JiraConfig } from "./config.js";
 
 export function registerTools(
@@ -305,6 +305,53 @@ export function registerTools(
               },
             },
             required: ["issueIdOrKey"],
+          },
+        },
+        {
+          name: "jira_add_comment",
+          description:
+            "Add a new comment to a Jira issue (Story, Bug, Task, etc.) by its key or numeric ID. REQUIRED: Always provide a Markdown-formatted comment body. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, blockquotes (>), and horizontal rules (---). Automatically converted to Atlassian Document Format (ADF) for Jira Cloud.",
+          inputSchema: {
+            type: "object" as const,
+            properties: {
+              issueIdOrKey: {
+                type: "string",
+                description:
+                  "The Jira issue key (e.g. 'PROJ-123') or numeric issue ID to comment on.",
+              },
+              markdownBody: {
+                type: "string",
+                description:
+                  "REQUIRED. The comment body in Markdown format. Use headers, lists, bold, italic, code, links, tables, blockquotes, and horizontal rules. This will be converted to ADF for Jira.",
+              },
+            },
+            required: ["issueIdOrKey", "markdownBody"],
+          },
+        },
+        {
+          name: "jira_update_comment",
+          description:
+            "Update the body of an existing comment on a Jira issue. Identify the comment by the issue key/ID and the comment ID (returned by jira_add_comment). REQUIRED: Always provide the new Markdown-formatted comment body. Automatically converted to Atlassian Document Format (ADF) for Jira Cloud. Note: comments cannot be deleted through this server.",
+          inputSchema: {
+            type: "object" as const,
+            properties: {
+              issueIdOrKey: {
+                type: "string",
+                description:
+                  "The Jira issue key (e.g. 'PROJ-123') or numeric issue ID the comment belongs to.",
+              },
+              commentId: {
+                type: "string",
+                description:
+                  "The ID of the comment to update (e.g. as returned by jira_add_comment).",
+              },
+              markdownBody: {
+                type: "string",
+                description:
+                  "REQUIRED. The new comment body in Markdown format. Use headers, lists, bold, italic, code, links, tables, blockquotes, and horizontal rules. This will be converted to ADF for Jira.",
+              },
+            },
+            required: ["issueIdOrKey", "commentId", "markdownBody"],
           },
         },
       ],
@@ -889,6 +936,150 @@ export function registerTools(
               {
                 type: "text" as const,
                 text: `Error fetching Jira transitions: ${message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case "jira_add_comment": {
+        const issueIdOrKey = args?.issueIdOrKey as string;
+        const markdownBody = args?.markdownBody as string | undefined;
+
+        // Enforce markdown comment body requirement
+        if (!markdownBody || markdownBody.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    error: "Comment body is required",
+                    message: "You must provide a non-empty markdown-formatted comment body. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, and other markdown features.",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        try {
+          const commentResponse = await addJiraComment(
+            jiraClient,
+            issueIdOrKey,
+            markdownBody,
+            jiraConfig.projectKey
+          );
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    message: `Comment ${commentResponse.id} added successfully to issue "${commentResponse.issueKey}".`,
+                    ...commentResponse,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error adding comment to Jira issue: ${message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case "jira_update_comment": {
+        const issueIdOrKey = args?.issueIdOrKey as string;
+        const commentId = args?.commentId as string | undefined;
+        const markdownBody = args?.markdownBody as string | undefined;
+
+        // Enforce comment ID requirement
+        if (!commentId || commentId.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    error: "Comment ID is required",
+                    message: "You must provide the ID of the comment to update. Comment IDs are returned by jira_add_comment.",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Enforce markdown comment body requirement
+        if (!markdownBody || markdownBody.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    error: "Comment body is required",
+                    message: "You must provide a non-empty markdown-formatted comment body. Use headers (# ## ###), lists (*, -), bold (**text**), italic (*text*), code (`code`), links ([text](url)), tables, and other markdown features.",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        try {
+          const commentResponse = await updateJiraComment(
+            jiraClient,
+            issueIdOrKey,
+            commentId,
+            markdownBody,
+            jiraConfig.projectKey
+          );
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    message: `Comment ${commentResponse.id} on issue "${commentResponse.issueKey}" updated successfully.`,
+                    ...commentResponse,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error updating Jira comment: ${message}`,
               },
             ],
             isError: true,

@@ -6,6 +6,8 @@ import {
   updateJiraIssue,
   transitionJiraIssue,
   getJiraIssueTransitions,
+  addJiraComment,
+  updateJiraComment,
 } from "../../src/jira.js";
 import type { AxiosInstance, AxiosResponse } from "axios";
 

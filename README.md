@@ -206,6 +206,8 @@ Server runs on `http://127.0.0.1:9339` by default.
 - `jira_update_issue` - Update issue fields
 - `jira_transition_issue` - Change workflow status
 - `jira_get_transitions` - List available transitions
+- `jira_add_comment` - Add a Markdown comment to an issue
+- `jira_update_comment` - Update an existing comment on an issue
 
 ## Configuration
 

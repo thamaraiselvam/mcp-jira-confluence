@@ -146,13 +146,13 @@ describe("integration — MCP Client ↔ Server", () => {
       expect(Array.isArray(result.tools)).toBe(true);
     });
 
-    it("exposes exactly thirteen tools", async () => {
+    it("exposes exactly fifteen tools", async () => {
       const result = await client.request(
         { method: "tools/list", params: {} },
         ListToolsResultSchema
       );
 
-      expect(result.tools).toHaveLength(13);
+      expect(result.tools).toHaveLength(15);
     });
 
     it("exposes search_confluence with the correct schema", async () => {
@@ -1057,7 +1057,7 @@ describe("integration — MCP Client ↔ Server", () => {
         ListToolsResultSchema
       );
 
-      expect(listResult.tools).toHaveLength(13);
+      expect(listResult.tools).toHaveLength(15);
       const toolNames = listResult.tools.map((t) => t.name);
       expect(toolNames).toContain("search_confluence");
       expect(toolNames).toContain("get_confluence_page");

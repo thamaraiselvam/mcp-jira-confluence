@@ -174,9 +174,9 @@ describe("tools — registerTools()", () => {
   // ListTools handler
   // -------------------------------------------------------
   describe("ListTools handler", () => {
-    it("returns exactly thirteen tools", async () => {
+    it("returns exactly fifteen tools", async () => {
       const result = await handlers.listTools!();
-      expect(result.tools).toHaveLength(13);
+      expect(result.tools).toHaveLength(15);
     });
 
     it("returns search_confluence as the first tool", async () => {
