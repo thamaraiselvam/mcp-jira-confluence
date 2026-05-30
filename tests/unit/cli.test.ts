@@ -13,6 +13,7 @@ import {
   topLevelHelp,
   commandHelp,
   isInvokedAsScript,
+  isCliInvocation,
   type CliDeps,
 } from "../../src/cli.js";
 import { markdownToAdf } from "../../src/jira-markdown.js";
@@ -149,6 +150,30 @@ describe("parseArgs", () => {
     expect(parsed.positionals).toEqual([]);
     expect(parsed.json).toBe(false);
     expect(parsed.help).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Entry routing — isCliInvocation decides CLI vs MCP server
+// ===========================================================================
+describe("isCliInvocation", () => {
+  it("routes to the CLI for a jira/confluence group as the first arg", () => {
+    expect(isCliInvocation(["jira"])).toBe(true);
+    expect(isCliInvocation(["jira", "get-issue", "PROJ-1"])).toBe(true);
+    expect(isCliInvocation(["confluence", "search", "--cql", "x"])).toBe(true);
+  });
+
+  it("routes to the CLI for top-level help flags", () => {
+    expect(isCliInvocation(["--help"])).toBe(true);
+    expect(isCliInvocation(["-h"])).toBe(true);
+  });
+
+  it("falls through to the server for no args or non-CLI first args", () => {
+    expect(isCliInvocation([])).toBe(false);
+    expect(isCliInvocation(["--verbose"])).toBe(false);
+    expect(isCliInvocation(["bitbucket"])).toBe(false);
+    // a group must be the FIRST arg — not buried later
+    expect(isCliInvocation(["--json", "jira"])).toBe(false);
   });
 });
 

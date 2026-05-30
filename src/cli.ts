@@ -525,10 +525,32 @@ export function findCommand(
 }
 
 // ---------------------------------------------------------------------------
+// Entry routing
+// ---------------------------------------------------------------------------
+
+/** CLI command groups that, as the first argument, route to the one-shot CLI. */
+const CLI_GROUPS = new Set(["confluence", "jira"]);
+
+/**
+ * Decide whether an argv (already stripped of node + script path) is a CLI
+ * invocation rather than an MCP server launch. The package's single entry point
+ * (`mcp-jira-confluence`) dispatches to the CLI when the first argument is a CLI
+ * group (`confluence`/`jira`) or a top-level help flag; everything else (no
+ * args, server flags, the way MCP clients launch it) starts the server.
+ */
+export function isCliInvocation(argv: string[]): boolean {
+  const first = argv[0];
+  if (first === undefined) return false;
+  return CLI_GROUPS.has(first) || first === "--help" || first === "-h";
+}
+
+// ---------------------------------------------------------------------------
 // Help text
 // ---------------------------------------------------------------------------
 
-const BIN = "jira-confluence";
+// Shown in usage/help. The CLI has no dedicated bin — it is reached through the
+// package's single entry point, canonically via npx.
+const BIN = "npx -y mcp-jira-confluence@latest";
 
 export function topLevelHelp(): string {
   const groups = ["confluence", "jira"] as const;

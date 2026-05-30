@@ -6,6 +6,23 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { loadConfig, loadJiraConfig } from "./config.js";
 import { createConfluenceClient, createJiraClient } from "./client.js";
 import { registerTools } from "./tools.js";
+import { run as runCli, isCliInvocation } from "./cli.js";
+
+// ---------------------------------------------------------------------------
+// CLI routing — this single entry point doubles as the one-shot CLI.
+// ---------------------------------------------------------------------------
+// When invoked with a CLI group/command (first arg `confluence` or `jira`) or a
+// top-level help flag, dispatch to the CLI and exit — without starting the MCP
+// server. Anything else (no args, server flags, the way MCP clients launch us)
+// falls through to the server bootstrap below. There is no separate
+// `jira-confluence` bin; the CLI is reached via `mcp-jira-confluence <group>
+// <command>` (e.g. `npx -y mcp-jira-confluence@latest jira get-issue PROJ-1`).
+const cliArgv = process.argv.slice(2);
+if (isCliInvocation(cliArgv)) {
+  // Top-level await: nothing below this guard evaluates on the CLI path, and
+  // process.exit prevents the server bootstrap from ever running.
+  process.exit(await runCli(cliArgv));
+}
 
 // ---------------------------------------------------------------------------
 // Verbose Mode — controlled via VERBOSE env var

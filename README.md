@@ -213,46 +213,49 @@ Server runs on `http://127.0.0.1:9339` by default.
 
 The same package also ships a command-line interface, so you can drive Jira and Confluence straight from a terminal, a shell script, or a Claude skill — without an MCP client. Every MCP tool above has a matching CLI command, grouped under `jira` and `confluence`.
 
-The package installs two binaries:
-
-| Binary | Purpose |
-| --- | --- |
-| `mcp-jira-confluence` | The MCP server (stdio/HTTP) — used by AI clients. |
-| `jira-confluence` | The one-shot CLI described here. |
+The CLI shares the **single** `mcp-jira-confluence` entry point — there is **no separate executable**. Invoke it as `<entry> <group> <command>`, where `<group>` is `jira` or `confluence`. With no group, the same entry point starts the MCP server instead.
 
 It reads the **same** environment variables as the server (`ATLASSIAN_*`, or service-specific `JIRA_*` / `CONFLUENCE_*`). Set them in your shell or a `.env` file.
 
+**Run it with npx (no install needed):**
+
+```bash
+npx -y mcp-jira-confluence@latest --help
+```
+
+> Installed the package globally (`npm install -g mcp-jira-confluence@latest`)? Drop the `npx -y …@latest` prefix and call `mcp-jira-confluence <group> <command>` directly. The examples below use the npx form.
+
 ```bash
 # List all command groups and commands
-jira-confluence --help
+npx -y mcp-jira-confluence@latest --help
 
 # Per-command help (shows required/optional arguments)
-jira-confluence jira create-issue --help
+npx -y mcp-jira-confluence@latest jira create-issue --help
 
 # --- Jira ---
-jira-confluence jira search --jql "status = 'In Progress'" --limit 10
-jira-confluence jira get-issue PROJ-123
-jira-confluence jira create-issue \
+npx -y mcp-jira-confluence@latest jira search --jql "status = 'In Progress'" --limit 10
+npx -y mcp-jira-confluence@latest jira get-issue PROJ-123
+npx -y mcp-jira-confluence@latest jira create-issue \
   --projectKey PROJ --issueType Story \
   --summary "New story" --description ./description.md \
   --priority High --labels "backend,urgent"
 # Update plain fields as JSON, and/or the description from a Markdown file:
-jira-confluence jira update-issue PROJ-123 --fields '{"summary":"Updated title"}'
-jira-confluence jira update-issue PROJ-123 --descriptionFile ./description.md
-jira-confluence jira transition-issue PROJ-123 "In Progress"
-jira-confluence jira get-transitions PROJ-123
-jira-confluence jira add-comment PROJ-123 ./comment.md
-jira-confluence jira update-comment PROJ-123 100042 ./comment.md
+npx -y mcp-jira-confluence@latest jira update-issue PROJ-123 --fields '{"summary":"Updated title"}'
+npx -y mcp-jira-confluence@latest jira update-issue PROJ-123 --descriptionFile ./description.md
+npx -y mcp-jira-confluence@latest jira transition-issue PROJ-123 "In Progress"
+npx -y mcp-jira-confluence@latest jira get-transitions PROJ-123
+npx -y mcp-jira-confluence@latest jira add-comment PROJ-123 ./comment.md
+npx -y mcp-jira-confluence@latest jira update-comment PROJ-123 100042 ./comment.md
 
 # --- Confluence ---
-jira-confluence confluence search --cql "type=page AND title~'Roadmap'"
-jira-confluence confluence get-page 12345
-jira-confluence confluence create-page \
+npx -y mcp-jira-confluence@latest confluence search --cql "type=page AND title~'Roadmap'"
+npx -y mcp-jira-confluence@latest confluence get-page 12345
+npx -y mcp-jira-confluence@latest confluence create-page \
   --spaceKey ENG --title "Design Notes" --markdownContent ./notes.md
-jira-confluence confluence update-page 12345 "New Title" ./notes.md
-jira-confluence confluence add-comment 12345 ./comment.md
-jira-confluence confluence get-page-versions 12345 --limit 5
-jira-confluence confluence check-permissions
+npx -y mcp-jira-confluence@latest confluence update-page 12345 "New Title" ./notes.md
+npx -y mcp-jira-confluence@latest confluence add-comment 12345 ./comment.md
+npx -y mcp-jira-confluence@latest confluence get-page-versions 12345 --limit 5
+npx -y mcp-jira-confluence@latest confluence check-permissions
 ```
 
 **Notes:**
@@ -264,6 +267,16 @@ jira-confluence confluence check-permissions
 - Commands exit `0` on success and non-zero on any failure (missing argument, missing config, or API error).
 - Like the MCP server, the CLI has **no delete operations**.
 
+## AI Agent Skill
+
+### Installation
+
+Copy and paste this prompt to your LLM agent (Claude Code, AmpCode, Cursor, etc.):
+
+```
+Install and configure the Jira & Confluence CLI agent skill by following the instructions here:
+https://raw.githubusercontent.com/thamaraiselvam/mcp-jira-confluence/main/docs/agent-skill-setup.md
+```
 ## Configuration
 
 ### Optional Variables
