@@ -18,7 +18,20 @@ A Model Context Protocol (MCP) server that connects AI assistants to Jira and Co
 - 🚀 **Easy Setup** - One-command integration with OpenCode, GitHub Copilot, Claude Desktop, and more
 - 🔐 **Secure** - Uses Atlassian API tokens with optional TLS configuration for corporate networks
 
-## Add to OpenCode CLI
+## AI Agent Skill
+
+### Installation
+
+Copy and paste this prompt to your LLM agent (Claude Code, AmpCode, Cursor, etc.):
+
+```
+Install and configure the Jira & Confluence CLI agent skill by following the instructions here:
+https://raw.githubusercontent.com/thamaraiselvam/mcp-jira-confluence/main/docs/agent-skill-setup.md
+```
+
+## MCP Server
+
+### Add to OpenCode CLI
 
 ### Quick Add (Interactive - Recommended)
 
@@ -267,16 +280,6 @@ npx -y mcp-jira-confluence@latest confluence check-permissions
 - Commands exit `0` on success and non-zero on any failure (missing argument, missing config, or API error).
 - Like the MCP server, the CLI has **no delete operations**.
 
-## AI Agent Skill
-
-### Installation
-
-Copy and paste this prompt to your LLM agent (Claude Code, AmpCode, Cursor, etc.):
-
-```
-Install and configure the Jira & Confluence CLI agent skill by following the instructions here:
-https://raw.githubusercontent.com/thamaraiselvam/mcp-jira-confluence/main/docs/agent-skill-setup.md
-```
 ## Configuration
 
 ### Optional Variables
