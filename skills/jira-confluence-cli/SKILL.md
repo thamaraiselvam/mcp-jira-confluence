@@ -4,7 +4,7 @@ description: Manage Jira issues and Confluence pages using the published `mcp-ji
 license: MIT
 metadata:
   author: thamaraiselvam
-  version: "3.0.0"
+  version: "3.1.0"
 ---
 
 # Jira & Confluence CLI Skill
