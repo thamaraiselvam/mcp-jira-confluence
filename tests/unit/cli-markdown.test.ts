@@ -37,13 +37,19 @@ function makeMockClient(postData: unknown) {
 
 function makeDeps(
   client: AxiosInstance,
-  which: "confluence" | "jira"
+  which: "confluence" | "jira",
+  files: Record<string, string> = {}
 ): CliDeps {
   return {
     loadConfluenceConfig: () => confluenceConfig,
     loadJiraConfiguration: () => jiraConfig,
     buildConfluenceClient: () => (which === "confluence" ? client : ({} as AxiosInstance)),
     buildJiraClient: () => (which === "jira" ? client : ({} as AxiosInstance)),
+    // Content args are file paths; map them to their Markdown for the test.
+    readFile: (path) => {
+      if (path in files) return files[path];
+      throw new Error(`unexpected readFile: ${path}`);
+    },
     stdout: () => {},
     stderr: () => {},
   };
@@ -68,9 +74,9 @@ describe("markdown conversion through the CLI", () => {
         "--title",
         "T",
         "--markdownContent",
-        "# Heading\n\n**bold**",
+        "page.md",
       ],
-      makeDeps(client, "confluence")
+      makeDeps(client, "confluence", { "page.md": "# Heading\n\n**bold**" })
     );
 
     expect(code).toBe(0);
@@ -96,9 +102,9 @@ describe("markdown conversion through the CLI", () => {
         "--summary",
         "S",
         "--description",
-        "# Title\n\nSome text",
+        "desc.md",
       ],
-      makeDeps(client, "jira")
+      makeDeps(client, "jira", { "desc.md": "# Title\n\nSome text" })
     );
 
     expect(code).toBe(0);
@@ -113,8 +119,8 @@ describe("markdown conversion through the CLI", () => {
     const { client, post } = makeMockClient({ id: "10" });
 
     const code = await run(
-      ["jira", "add-comment", "PROJ-1", "**important** update"],
-      makeDeps(client, "jira")
+      ["jira", "add-comment", "PROJ-1", "note.md"],
+      makeDeps(client, "jira", { "note.md": "**important** update" })
     );
 
     expect(code).toBe(0);

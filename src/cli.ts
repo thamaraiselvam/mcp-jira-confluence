@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { realpathSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AxiosInstance } from "axios";
 import {
@@ -11,6 +11,7 @@ import {
 import { createConfluenceClient, createJiraClient } from "./client.js";
 import * as confluence from "./confluence.js";
 import * as jira from "./jira.js";
+import { markdownToAdf } from "./jira-markdown.js";
 
 // ---------------------------------------------------------------------------
 // Argument parsing
@@ -105,6 +106,12 @@ export interface ArgSpec {
   name: string;
   required: boolean;
   description: string;
+  /**
+   * When true, the argument's value is a path to a Markdown file. The
+   * dispatcher reads the file and replaces the value with its contents before
+   * invoking the command handler.
+   */
+  contentFile?: boolean;
 }
 
 export interface CommandDef {
@@ -133,6 +140,35 @@ function list(value: string | undefined): string[] | undefined {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   return items.length > 0 ? items : undefined;
+}
+
+/**
+ * Read Markdown rich-text content from a file path. All content-bearing CLI
+ * arguments are supplied as file paths (never inline) so multi-line Markdown is
+ * passed reliably. Throws a clear, typed error — surfaced before any network
+ * call — when the file is missing, unreadable (e.g. a directory or permission
+ * error), or empty/whitespace-only. The raw Markdown is returned unchanged; the
+ * API layer performs the HTML/ADF conversion.
+ */
+export function readContentFile(
+  path: string,
+  readFile: (p: string) => string
+): string {
+  let raw: string;
+  try {
+    raw = readFile(path);
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") {
+      throw new Error(`File not found: ${path}`);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read file "${path}": ${message}`);
+  }
+  if (raw.trim().length === 0) {
+    throw new Error(`File "${path}" is empty — expected Markdown content.`);
+  }
+  return raw;
 }
 
 export const commands: CommandDef[] = [
@@ -175,7 +211,8 @@ export const commands: CommandDef[] = [
       {
         name: "markdownContent",
         required: true,
-        description: "Page body in Markdown.",
+        description: "Path to a Markdown file for the page body.",
+        contentFile: true,
       },
       {
         name: "parentPageId",
@@ -203,7 +240,8 @@ export const commands: CommandDef[] = [
       {
         name: "markdownContent",
         required: true,
-        description: "New page body in Markdown.",
+        description: "Path to a Markdown file for the new page body.",
+        contentFile: true,
       },
     ],
     run: (v, ctx) =>
@@ -224,7 +262,8 @@ export const commands: CommandDef[] = [
       {
         name: "markdownContent",
         required: true,
-        description: "Comment body in Markdown.",
+        description: "Path to a Markdown file for the comment body.",
+        contentFile: true,
       },
     ],
     run: (v, ctx) =>
@@ -313,7 +352,8 @@ export const commands: CommandDef[] = [
       {
         name: "description",
         required: true,
-        description: "Description in Markdown.",
+        description: "Path to a Markdown file for the description.",
+        contentFile: true,
       },
       {
         name: "assigneeAccountId",
@@ -343,7 +383,7 @@ export const commands: CommandDef[] = [
   {
     group: "jira",
     name: "update-issue",
-    description: "Update fields on a Jira issue (fields as a JSON object).",
+    description: "Update fields on a Jira issue (fields JSON and/or description file).",
     args: [
       {
         name: "issueIdOrKey",
@@ -352,18 +392,39 @@ export const commands: CommandDef[] = [
       },
       {
         name: "fields",
-        required: true,
+        required: false,
         description:
           'JSON object of fields to update, e.g. \'{"summary":"New"}\'.',
       },
+      {
+        name: "descriptionFile",
+        required: false,
+        description:
+          "Path to a Markdown file for the description (converted to ADF).",
+        contentFile: true,
+      },
     ],
     run: (v, ctx) => {
-      let fields: jira.JiraIssueFields;
-      try {
-        fields = JSON.parse(v.fields) as jira.JiraIssueFields;
-      } catch {
+      let fields: jira.JiraIssueFields = {};
+      if (v.fields !== undefined && v.fields.trim().length > 0) {
+        try {
+          fields = JSON.parse(v.fields) as jira.JiraIssueFields;
+        } catch {
+          throw new Error(
+            `--fields must be a valid JSON object, got: ${v.fields}`
+          );
+        }
+      }
+      // A description file (already read to Markdown by the dispatcher) is
+      // converted to ADF and wins over any description in --fields.
+      if (v.descriptionFile !== undefined) {
+        fields.description = markdownToAdf(
+          v.descriptionFile
+        ) as unknown as jira.JiraIssueFields["description"];
+      }
+      if (Object.keys(fields).length === 0) {
         throw new Error(
-          `--fields must be a valid JSON object, got: ${v.fields}`
+          "update-issue requires --fields and/or --descriptionFile"
         );
       }
       return jira.updateJiraIssue(ctx.jiraClient, v.issueIdOrKey, fields);
@@ -415,7 +476,8 @@ export const commands: CommandDef[] = [
       {
         name: "markdownBody",
         required: true,
-        description: "Comment body in Markdown.",
+        description: "Path to a Markdown file for the comment body.",
+        contentFile: true,
       },
     ],
     run: (v, ctx) =>
@@ -440,7 +502,8 @@ export const commands: CommandDef[] = [
       {
         name: "markdownBody",
         required: true,
-        description: "New comment body in Markdown.",
+        description: "Path to a Markdown file for the new comment body.",
+        contentFile: true,
       },
     ],
     run: (v, ctx) =>
@@ -488,7 +551,12 @@ export function topLevelHelp(): string {
 
 export function commandHelp(cmd: CommandDef): string {
   const usageArgs = cmd.args
-    .map((a) => (a.required ? `--${a.name} <value>` : `[--${a.name} <value>]`))
+    .map((a) => {
+      const placeholder = a.contentFile ? "<file.md>" : "<value>";
+      return a.required
+        ? `--${a.name} ${placeholder}`
+        : `[--${a.name} ${placeholder}]`;
+    })
     .join(" ");
   const lines: string[] = [
     `${BIN} ${cmd.group} ${cmd.name} — ${cmd.description}`,
@@ -552,6 +620,8 @@ export interface CliDeps {
   loadJiraConfiguration: typeof loadJiraConfig;
   buildConfluenceClient: typeof createConfluenceClient;
   buildJiraClient: typeof createJiraClient;
+  /** Read a file's contents as UTF-8. Injectable so tests avoid the disk. */
+  readFile: (path: string) => string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 }
@@ -561,6 +631,7 @@ const defaultDeps: CliDeps = {
   loadJiraConfiguration: loadJiraConfig,
   buildConfluenceClient: createConfluenceClient,
   buildJiraClient: createJiraClient,
+  readFile: (path) => readFileSync(path, "utf8"),
   stdout: (line) => process.stdout.write(`${line}\n`),
   stderr: (line) => process.stderr.write(`${line}\n`),
 };
@@ -649,6 +720,20 @@ export async function run(
       `Missing required argument(s) for "${parsed.group} ${parsed.command}": ${missing.join(", ")}`
     );
     deps.stderr(commandHelp(cmd));
+    return 1;
+  }
+
+  // Resolve content-file arguments (paths → Markdown contents) before touching
+  // config or the network, so a missing/empty/unreadable file fails fast.
+  try {
+    for (const arg of cmd.args) {
+      if (arg.contentFile && values[arg.name] !== undefined) {
+        values[arg.name] = readContentFile(values[arg.name], deps.readFile);
+      }
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    deps.stderr(`Error: ${message}`);
     return 1;
   }
 

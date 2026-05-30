@@ -234,28 +234,32 @@ jira-confluence jira search --jql "status = 'In Progress'" --limit 10
 jira-confluence jira get-issue PROJ-123
 jira-confluence jira create-issue \
   --projectKey PROJ --issueType Story \
-  --summary "New story" --description "# Goal\n\nShip it" \
+  --summary "New story" --description ./description.md \
   --priority High --labels "backend,urgent"
-jira-confluence jira update-issue PROJ-123 '{"summary":"Updated title"}'
+# Update plain fields as JSON, and/or the description from a Markdown file:
+jira-confluence jira update-issue PROJ-123 --fields '{"summary":"Updated title"}'
+jira-confluence jira update-issue PROJ-123 --descriptionFile ./description.md
 jira-confluence jira transition-issue PROJ-123 "In Progress"
 jira-confluence jira get-transitions PROJ-123
-jira-confluence jira add-comment PROJ-123 "Looks **good** to me"
-jira-confluence jira update-comment PROJ-123 100042 "Edited comment"
+jira-confluence jira add-comment PROJ-123 ./comment.md
+jira-confluence jira update-comment PROJ-123 100042 ./comment.md
 
 # --- Confluence ---
 jira-confluence confluence search --cql "type=page AND title~'Roadmap'"
 jira-confluence confluence get-page 12345
 jira-confluence confluence create-page \
-  --spaceKey ENG --title "Design Notes" --markdownContent "# Notes"
-jira-confluence confluence update-page 12345 "New Title" "# Updated body"
-jira-confluence confluence add-comment 12345 "Thanks for writing this up!"
+  --spaceKey ENG --title "Design Notes" --markdownContent ./notes.md
+jira-confluence confluence update-page 12345 "New Title" ./notes.md
+jira-confluence confluence add-comment 12345 ./comment.md
 jira-confluence confluence get-page-versions 12345 --limit 5
 jira-confluence confluence check-permissions
 ```
 
 **Notes:**
 - Arguments can be passed as named flags (`--summary "..."`) or as positionals in the order shown by `--help`.
-- Markdown is converted exactly as the MCP server does — to HTML for Confluence and to ADF for Jira.
+- **Markdown rich-text content is supplied as a path to a Markdown file**, not as an inline string — this keeps multi-line content reliable across shells. This applies to: Confluence `create-page`/`update-page` bodies and `add-comment`; Jira `create-issue` description, `add-comment`/`update-comment`, and `update-issue --descriptionFile`. (**BREAKING**: inline Markdown for these arguments is no longer accepted.)
+- `update-issue` takes a JSON `--fields` object for plain fields and/or a `--descriptionFile` for the description (the file wins if both set a description); at least one is required.
+- Markdown is converted exactly as the MCP server does — to HTML for Confluence and to ADF for Jira. The file's raw Markdown is passed to the API layer, which performs the conversion.
 - Add `--json` to any command to print the raw result as JSON for scripting; the default is a human-readable summary.
 - Commands exit `0` on success and non-zero on any failure (missing argument, missing config, or API error).
 - Like the MCP server, the CLI has **no delete operations**.

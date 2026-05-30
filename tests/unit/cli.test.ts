@@ -9,11 +9,13 @@ import {
   commands,
   findCommand,
   run,
+  readContentFile,
   topLevelHelp,
   commandHelp,
   isInvokedAsScript,
   type CliDeps,
 } from "../../src/cli.js";
+import { markdownToAdf } from "../../src/jira-markdown.js";
 import {
   mkdtempSync,
   writeFileSync,
@@ -72,19 +74,31 @@ function makeDeps(overrides: Partial<CliDeps> = {}): {
   deps: CliDeps;
   stdout: string[];
   stderr: string[];
+  files: Record<string, string>;
 } {
   const stdout: string[] = [];
   const stderr: string[] = [];
+  // In-memory file registry so content-file args resolve without disk I/O.
+  // An unregistered path throws an ENOENT-shaped error, like readFileSync.
+  const files: Record<string, string> = {};
   const deps: CliDeps = {
     loadConfluenceConfig: vi.fn(() => confluenceConfig),
     loadJiraConfiguration: vi.fn(() => jiraConfig),
     buildConfluenceClient: vi.fn(() => confluenceClient),
     buildJiraClient: vi.fn(() => jiraClient),
+    readFile: vi.fn((path: string) => {
+      if (path in files) return files[path];
+      const err: NodeJS.ErrnoException = new Error(
+        `ENOENT: no such file, open '${path}'`
+      );
+      err.code = "ENOENT";
+      throw err;
+    }),
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
     ...overrides,
   };
-  return { deps, stdout, stderr };
+  return { deps, stdout, stderr, files };
 }
 
 beforeEach(() => {
@@ -249,9 +263,10 @@ describe("dispatch — Confluence", () => {
     );
   });
 
-  it("create-page passes markdown and parent through", async () => {
+  it("create-page reads the body file and passes markdown and parent through", async () => {
     vi.mocked(confluenceModule.createConfluencePage).mockResolvedValue({} as never);
-    const { deps } = makeDeps();
+    const { deps, files } = makeDeps();
+    files["./body.md"] = "# Body";
     await run(
       [
         "confluence",
@@ -261,7 +276,7 @@ describe("dispatch — Confluence", () => {
         "--title",
         "Hi",
         "--markdownContent",
-        "# Body",
+        "./body.md",
         "--parentPageId",
         "99",
       ],
@@ -277,11 +292,12 @@ describe("dispatch — Confluence", () => {
     );
   });
 
-  it("update-page maps its args", async () => {
+  it("update-page reads the body file and maps its args", async () => {
     vi.mocked(confluenceModule.updateConfluencePage).mockResolvedValue({} as never);
-    const { deps } = makeDeps();
+    const { deps, files } = makeDeps();
+    files["body.md"] = "**md**";
     await run(
-      ["confluence", "update-page", "1", "Title", "**md**"],
+      ["confluence", "update-page", "1", "Title", "body.md"],
       deps
     );
     expect(confluenceModule.updateConfluencePage).toHaveBeenCalledWith(
@@ -293,10 +309,11 @@ describe("dispatch — Confluence", () => {
     );
   });
 
-  it("add-comment maps its args", async () => {
+  it("add-comment reads the body file and maps its args", async () => {
     vi.mocked(confluenceModule.addConfluenceComment).mockResolvedValue({} as never);
-    const { deps } = makeDeps();
-    await run(["confluence", "add-comment", "1", "hello"], deps);
+    const { deps, files } = makeDeps();
+    files["comment.md"] = "hello";
+    await run(["confluence", "add-comment", "1", "comment.md"], deps);
     expect(confluenceModule.addConfluenceComment).toHaveBeenCalledWith(
       confluenceClient,
       "1",
@@ -361,13 +378,14 @@ describe("dispatch — Jira", () => {
     expect(jiraModule.getJiraIssue).toHaveBeenCalledWith(jiraClient, "PROJ-1");
   });
 
-  it("create-issue maps fields and splits comma-separated labels", async () => {
+  it("create-issue reads the description file, maps fields and splits comma-separated labels", async () => {
     vi.mocked(jiraModule.createJiraIssue).mockResolvedValue({
       id: "1",
       key: "PROJ-2",
       url: "u",
     });
-    const { deps } = makeDeps();
+    const { deps, files } = makeDeps();
+    files["./desc.md"] = "# Details";
     await run(
       [
         "jira",
@@ -379,7 +397,7 @@ describe("dispatch — Jira", () => {
         "--summary",
         "A story",
         "--description",
-        "# Details",
+        "./desc.md",
         "--priority",
         "High",
         "--labels",
@@ -445,10 +463,11 @@ describe("dispatch — Jira", () => {
     );
   });
 
-  it("add-comment maps body and configured project", async () => {
+  it("add-comment reads the body file and maps configured project", async () => {
     vi.mocked(jiraModule.addJiraComment).mockResolvedValue({} as never);
-    const { deps } = makeDeps();
-    await run(["jira", "add-comment", "PROJ-1", "looks good"], deps);
+    const { deps, files } = makeDeps();
+    files["note.md"] = "looks good";
+    await run(["jira", "add-comment", "PROJ-1", "note.md"], deps);
     expect(jiraModule.addJiraComment).toHaveBeenCalledWith(
       jiraClient,
       "PROJ-1",
@@ -457,10 +476,11 @@ describe("dispatch — Jira", () => {
     );
   });
 
-  it("update-comment maps all three args", async () => {
+  it("update-comment reads the body file and maps all three args", async () => {
     vi.mocked(jiraModule.updateJiraComment).mockResolvedValue({} as never);
-    const { deps } = makeDeps();
-    await run(["jira", "update-comment", "PROJ-1", "100", "edited"], deps);
+    const { deps, files } = makeDeps();
+    files["edit.md"] = "edited";
+    await run(["jira", "update-comment", "PROJ-1", "100", "edit.md"], deps);
     expect(jiraModule.updateJiraComment).toHaveBeenCalledWith(
       jiraClient,
       "PROJ-1",
@@ -468,6 +488,163 @@ describe("dispatch — Jira", () => {
       "edited",
       "PROJ"
     );
+  });
+});
+
+// ===========================================================================
+// File-based Markdown content input (readContentFile + dispatch resolution)
+// ===========================================================================
+describe("readContentFile", () => {
+  it("returns file contents on success", () => {
+    const read = vi.fn(() => "# Title\n\nBody");
+    expect(readContentFile("doc.md", read)).toBe("# Title\n\nBody");
+    expect(read).toHaveBeenCalledWith("doc.md");
+  });
+
+  it("throws a clear error when the file does not exist", () => {
+    const read = vi.fn(() => {
+      const err: NodeJS.ErrnoException = new Error("nope");
+      err.code = "ENOENT";
+      throw err;
+    });
+    expect(() => readContentFile("missing.md", read)).toThrow(
+      "File not found: missing.md"
+    );
+  });
+
+  it("throws when the file is empty or whitespace-only", () => {
+    expect(() => readContentFile("empty.md", () => "")).toThrow("is empty");
+    expect(() => readContentFile("ws.md", () => "   \n\t  ")).toThrow(
+      "is empty"
+    );
+  });
+
+  it("wraps an unreadable-file error (e.g. directory/permission)", () => {
+    const read = vi.fn(() => {
+      const err: NodeJS.ErrnoException = new Error("illegal operation on a directory");
+      err.code = "EISDIR";
+      throw err;
+    });
+    expect(() => readContentFile("adir", read)).toThrow(
+      'Could not read file "adir":'
+    );
+  });
+});
+
+describe("content-file dispatch errors fail fast", () => {
+  it("missing content file exits 1 before building a client or calling the API", async () => {
+    const { deps, stderr } = makeDeps();
+    const code = await run(
+      [
+        "confluence",
+        "create-page",
+        "--spaceKey",
+        "ENG",
+        "--title",
+        "Hi",
+        "--markdownContent",
+        "does-not-exist.md",
+      ],
+      deps
+    );
+    expect(code).toBe(1);
+    expect(stderr.join("\n")).toContain("File not found: does-not-exist.md");
+    expect(deps.buildConfluenceClient).not.toHaveBeenCalled();
+    expect(confluenceModule.createConfluencePage).not.toHaveBeenCalled();
+  });
+
+  it("empty content file exits 1 before calling the Jira API", async () => {
+    const { deps, stderr, files } = makeDeps();
+    files["blank.md"] = "   ";
+    const code = await run(
+      [
+        "jira",
+        "create-issue",
+        "--projectKey",
+        "PROJ",
+        "--issueType",
+        "Story",
+        "--summary",
+        "S",
+        "--description",
+        "blank.md",
+      ],
+      deps
+    );
+    expect(code).toBe(1);
+    expect(stderr.join("\n")).toContain("is empty");
+    expect(deps.buildJiraClient).not.toHaveBeenCalled();
+    expect(jiraModule.createJiraIssue).not.toHaveBeenCalled();
+  });
+});
+
+describe("update-issue with a description file", () => {
+  it("converts the description file to ADF and merges it into fields", async () => {
+    vi.mocked(jiraModule.updateJiraIssue).mockResolvedValue({} as never);
+    const { deps, files } = makeDeps();
+    files["desc.md"] = "# Heading";
+    const code = await run(
+      [
+        "jira",
+        "update-issue",
+        "PROJ-1",
+        "--fields",
+        '{"summary":"New title"}',
+        "--descriptionFile",
+        "desc.md",
+      ],
+      deps
+    );
+    expect(code).toBe(0);
+    expect(jiraModule.updateJiraIssue).toHaveBeenCalledWith(jiraClient, "PROJ-1", {
+      summary: "New title",
+      description: markdownToAdf("# Heading"),
+    });
+  });
+
+  it("works with only a description file (no --fields)", async () => {
+    vi.mocked(jiraModule.updateJiraIssue).mockResolvedValue({} as never);
+    const { deps, files } = makeDeps();
+    files["desc.md"] = "Body text";
+    const code = await run(
+      ["jira", "update-issue", "PROJ-1", "--descriptionFile", "desc.md"],
+      deps
+    );
+    expect(code).toBe(0);
+    expect(jiraModule.updateJiraIssue).toHaveBeenCalledWith(jiraClient, "PROJ-1", {
+      description: markdownToAdf("Body text"),
+    });
+  });
+
+  it("lets the description file win over a description in --fields", async () => {
+    vi.mocked(jiraModule.updateJiraIssue).mockResolvedValue({} as never);
+    const { deps, files } = makeDeps();
+    files["desc.md"] = "from file";
+    await run(
+      [
+        "jira",
+        "update-issue",
+        "PROJ-1",
+        "--fields",
+        '{"description":"from json"}',
+        "--descriptionFile",
+        "desc.md",
+      ],
+      deps
+    );
+    expect(jiraModule.updateJiraIssue).toHaveBeenCalledWith(jiraClient, "PROJ-1", {
+      description: markdownToAdf("from file"),
+    });
+  });
+
+  it("errors when neither --fields nor --descriptionFile is provided", async () => {
+    const { deps, stderr } = makeDeps();
+    const code = await run(["jira", "update-issue", "PROJ-1"], deps);
+    expect(code).toBe(1);
+    expect(stderr.join("\n")).toContain(
+      "requires --fields and/or --descriptionFile"
+    );
+    expect(jiraModule.updateJiraIssue).not.toHaveBeenCalled();
   });
 });
 

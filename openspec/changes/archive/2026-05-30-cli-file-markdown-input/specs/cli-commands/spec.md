@@ -1,29 +1,4 @@
-# cli-commands Specification
-
-## Purpose
-
-Provide a command-line interface that exposes the package's existing Jira and Confluence MCP tools as one-shot CLI subcommands. The CLI coexists with the MCP server through a distinct entry point, runs a single command and exits, supports both human-readable and JSON output, returns conventional exit codes, and preserves the package's read-heavy, no-delete contract.
-
-## Requirements
-
-### Requirement: Dual-mode package entry
-
-The package SHALL continue to function as an MCP server through its existing entry point while ALSO providing a distinct command-line entry point that runs one-shot commands and exits. Invoking the CLI entry point MUST NOT start the MCP server transport, and launching the MCP server MUST NOT trigger CLI argument parsing.
-
-#### Scenario: CLI entry runs a command and exits
-
-- **WHEN** the user runs the CLI binary with a valid command and arguments
-- **THEN** the CLI executes that single command, prints the result, and exits with code 0 without opening an MCP transport
-
-#### Scenario: MCP server entry is unchanged
-
-- **WHEN** the package is launched through its existing MCP server entry point (stdio or HTTP)
-- **THEN** it behaves exactly as before, registering and serving all MCP tools
-
-#### Scenario: No command shows help
-
-- **WHEN** the user runs the CLI binary with no arguments
-- **THEN** the CLI prints top-level usage listing the `jira` and `confluence` command groups and exits with a non-zero code
+## ADDED Requirements
 
 ### Requirement: File-based Markdown content input
 
@@ -48,6 +23,8 @@ Every CLI argument that carries Markdown rich-text content SHALL be supplied as 
 
 - **WHEN** the user supplies a content file path that cannot be read (e.g. a directory or a permission error)
 - **THEN** the CLI prints the read error and exits with a non-zero code without calling the Atlassian API
+
+## MODIFIED Requirements
 
 ### Requirement: Confluence CLI commands
 
@@ -101,42 +78,3 @@ The CLI SHALL expose every existing Jira MCP tool as a subcommand under a `jira`
 
 - **WHEN** the user runs create-issue, add-comment, or update-comment with a content file path that does not exist
 - **THEN** the CLI prints an error naming the missing file and exits with a non-zero code without calling the Atlassian API
-
-### Requirement: Output formatting
-
-The CLI SHALL print human-readable formatted text by default and SHALL emit raw JSON when the `--json` flag is supplied, so output can be consumed by scripts.
-
-#### Scenario: Default human-readable output
-
-- **WHEN** a command succeeds without the `--json` flag
-- **THEN** the CLI prints a formatted, labeled summary of the result to stdout
-
-#### Scenario: JSON output
-
-- **WHEN** a command succeeds with the `--json` flag
-- **THEN** the CLI prints the result as a single valid JSON document to stdout and nothing else on stdout
-
-### Requirement: Error handling and exit codes
-
-The CLI SHALL exit with code 0 on success and a non-zero code on any failure (missing arguments, missing configuration, or Atlassian API errors), printing a clear error message to stderr.
-
-#### Scenario: Missing configuration
-
-- **WHEN** required Atlassian credentials/environment variables are absent and the user runs any command that needs them
-- **THEN** the CLI prints an error listing the missing configuration and exits with a non-zero code
-
-#### Scenario: Atlassian API error surfaces
-
-- **WHEN** the underlying Jira or Confluence API call fails
-- **THEN** the CLI prints the error message to stderr and exits with a non-zero code
-
-### Requirement: No delete operations
-
-The CLI SHALL NOT expose any command that deletes Jira issues, Confluence pages, comments, or other content, preserving the package's read-heavy, no-delete contract.
-
-#### Scenario: No delete subcommand exists
-
-- **WHEN** the user lists available CLI commands via help
-- **THEN** no delete/remove command is listed for either the jira or confluence group
-</content>
-</invoke>
